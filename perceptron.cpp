@@ -166,23 +166,23 @@ bool Perceptron::load_block(vector<vector<int> > &token_matrix, ifstream &fin)
 	vector<int> default_token_vec;
 	token_matrix.push_back(default_token_vec);
 	token_matrix.push_back(default_token_vec);
-	size_t n;
+	size_t field_size;
 	while(getline(fin,line))
 	{
 		TrimLine(line);
 		if (line.size() == 0)
 		{
-			token_matrix.at(0).resize(n,0);
-			token_matrix.at(1).resize(n,0);
+			token_matrix.at(0).resize(field_size,0);
+			token_matrix.at(1).resize(field_size,0);
 			token_matrix.push_back(token_matrix.at(0));
 			token_matrix.push_back(token_matrix.at(0));
 			return true;
 		}
 		vector<string> fields;
 		Split(fields,line);
-		n = fields.size();
+		field_size = fields.size();
 		vector<int> token_vec;
-		for (size_t i=0;i<n;i++)
+		for (size_t i=0;i<field_size;i++)
 		{
 			token_vec.push_back(s2i(fields.at(i)));
 		}
@@ -411,8 +411,8 @@ void Perceptron::add_to_new(const vector<Cand> &candvec)
 				{
 					candlist_new.at(j).taglist = candvec.at(i).taglist;
 					candlist_new.at(j).acc_score = candvec.at(i).acc_score;
-					break;
 				}
+				break;
 			}
 		}
 		if (is_history_same == false)
