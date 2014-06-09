@@ -374,8 +374,8 @@ void Perceptron::extract_features(vector<vector<int> > &features, const vector<i
 	}
 	for (size_t i=0;i<4;i++)
 	{
-		feature.push_back(i+5);
 		feature.clear();
+		feature.push_back(i+5);
 		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+arr[i]).at(0));
 		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+arr[i+1]).at(0));
 		feature.push_back(taglist.at(feature_extract_pos));
