@@ -47,7 +47,8 @@ void Perceptron::train(string &train_file)
 		}
 		cout<<"round "<<m_round<<endl;
 	}
-	save_model();
+	//save_model();
+	save_bin_model();
 }
 
 void Perceptron::save_model()
@@ -56,7 +57,7 @@ void Perceptron::save_model()
 	fout.open("model");
 	if (!fout.is_open())
 	{
-		cerr<<"fail to open model file\n";
+		cerr<<"fail to open model file to write\n";
 		return;
 	}
 	for(map<vector<int>,WeightInfo>::iterator it=train_para_dict.begin();it!=train_para_dict.end();it++)
@@ -69,11 +70,41 @@ void Perceptron::save_model()
 		}
 		fout<<it->second.acc_weight/(ROUND*LINE)<<endl;
 	}
+	cout<<"save model over\n";
+}
+
+void Perceptron::save_bin_model()
+{
+	ofstream fout("model.bin",ios::binary);
+	if (!fout.is_open())
+	{
+		cerr<<"fail to open binary model file to write!\n";
+		return;
+	}
+	size_t feature_num = 0;
+	for(map<vector<int>,WeightInfo>::iterator it=train_para_dict.begin();it!=train_para_dict.end();it++)
+	{
+		if (it->second.acc_weight > -1e-10 && it->second.acc_weight < 1e-10)
+			continue;
+		feature_num++;
+	}
+	fout.write((char*)&feature_num,sizeof(size_t));
+	for(map<vector<int>,WeightInfo>::iterator it=train_para_dict.begin();it!=train_para_dict.end();it++)
+	{
+		if (it->second.acc_weight > -1e-10 && it->second.acc_weight < 1e-10)
+			continue;
+		size_t len = it->first.size();
+		fout.write((char*)&len,sizeof(size_t));
+		fout.write((char*)&(it->first.at(0)),sizeof(int)*it->first.size());
+		double weight = it->second.acc_weight/(ROUND*LINE);
+		fout.write((char*)&(weight),sizeof(double));
+	}
+	cout<<"save binary model over\n";
 }
 
 void Perceptron::test(string &test_file)
 {
-	load_model();
+	load_bin_model();
 	load_data(test_file);
 	LINE = m_token_matrix_list.size();
 	ofstream fout;
@@ -272,6 +303,31 @@ void Perceptron::load_model()
 		test_para_dict[feature] = s2d(toks.at(toks.size()-1));
 	}
 	cout<<"load model over\n";
+}
+
+void Perceptron::load_bin_model()
+{
+	ifstream fin;
+	fin.open("model.bin",ios::binary);
+	if (!fin.is_open())
+	{
+		cerr<<"fail to open binary model file\n";
+		return;
+	}
+	size_t feature_num;
+	fin.read((char*)&feature_num, sizeof(size_t));
+	size_t len;
+	for (size_t i = 0; i < feature_num; i++) 
+	{
+		fin.read((char*)&len, sizeof(size_t));
+		vector<int> feature;
+		feature.resize(len);
+		fin.read((char*)&(feature.at(0)),sizeof(int)*len);
+		double weight;
+		fin.read((char*)&weight, sizeof(double));
+		test_para_dict[feature] = weight;
+	}
+	cout<<"load binary model over\n";
 }
 
 void Perceptron::decode()

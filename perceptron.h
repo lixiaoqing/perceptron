@@ -32,8 +32,10 @@ class Perceptron
 		bool load_block(vector<vector<int> > &token_matrix, ifstream &fin);
 		void decode_with_update();
 		void save_model();
+		void save_bin_model();
 
 		void load_model();
+		void load_bin_model();
 		void decode();
 
 		void expand(vector<Cand> &candvec, const Cand &cand);
