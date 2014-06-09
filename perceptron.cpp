@@ -33,7 +33,7 @@ void Perceptron::train(string &train_file)
 			decode_with_update();
 			if (m_line == LINE - 1)
 			{
-				for (map<string,WeightInfo>::iterator it=train_para_dict.begin();it!=train_para_dict.end();it++)
+				for (unordered_map<string,WeightInfo>::iterator it=train_para_dict.begin();it!=train_para_dict.end();it++)
 				{
 					it->second.acc_weight += it->second.weight*((m_round - it->second.lastround)*LINE + m_line - it->second.lastline);
 					it->second.lastline = m_line;
@@ -59,7 +59,7 @@ void Perceptron::save_model()
 		cerr<<"fail to open model file\n";
 		return;
 	}
-	for(map<string,WeightInfo>::iterator it=train_para_dict.begin();it!=train_para_dict.end();it++)
+	for(unordered_map<string,WeightInfo>::iterator it=train_para_dict.begin();it!=train_para_dict.end();it++)
 	{
 		if (it->second.acc_weight > -1e-10 && it->second.acc_weight < 1e-10)
 			continue;
@@ -300,7 +300,7 @@ void Perceptron::expand(vector<Cand> &candvec, const Cand &cand)
 	candvec.clear();
 	string cur_tok = m_token_matrix_ptr->at(cur_pos).at(0);
 	set<string> validtagset1;
-	map<string,set<string> >::iterator it = tagset_for_token.find(cur_tok);
+	unordered_map<string,set<string> >::iterator it = tagset_for_token.find(cur_tok);
 	if (it != tagset_for_token.end())
 	{
 		validtagset1 = it->second;
@@ -403,7 +403,7 @@ void Perceptron::update_paras()
 {
 	for (size_t i=0;i<local_features.size();i++)
 	{
-		map<string,WeightInfo>::iterator it = train_para_dict.find(local_features.at(i));
+		unordered_map<string,WeightInfo>::iterator it = train_para_dict.find(local_features.at(i));
 		if (it == train_para_dict.end())
 		{
 			WeightInfo tmp = {-1,-1,m_line,m_round};
@@ -419,7 +419,7 @@ void Perceptron::update_paras()
 	}
 	for (size_t i=0;i<local_gold_features.size();i++)
 	{
-		map<string,WeightInfo>::iterator it = train_para_dict.find(local_gold_features.at(i));
+		unordered_map<string,WeightInfo>::iterator it = train_para_dict.find(local_gold_features.at(i));
 		if (it == train_para_dict.end())
 		{
 			WeightInfo tmp = {1,1,m_line,m_round};

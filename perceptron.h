@@ -15,8 +15,8 @@ struct WeightInfo
 {
 	double weight;
 	double acc_weight;
-	int lastline;
-	int lastround;
+	size_t lastline;
+	size_t lastround;
 };
 
 class Perceptron
@@ -57,8 +57,8 @@ class Perceptron
 		size_t cur_pos;
 		vector<Cand> candlist_old;
 		vector<Cand> candlist_new;
-		map<string, WeightInfo> train_para_dict;
-		map<string, double> test_para_dict;
-		map<string, set<string> > tagset_for_token;
-		map<string, set<string> > tagset_for_last_tag;
+		unordered_map<string, WeightInfo> train_para_dict;
+		unordered_map<string, double> test_para_dict;
+		unordered_map<string, set<string> > tagset_for_token;
+		unordered_map<string, set<string> > tagset_for_last_tag;
 };
