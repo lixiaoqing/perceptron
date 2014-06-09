@@ -33,7 +33,7 @@ void Perceptron::train(string &train_file)
 			decode_with_update();
 			if (m_line == LINE - 1)
 			{
-				for (map<vector<int>,WeightInfo>::iterator it=train_para_dict.begin();it!=train_para_dict.end();it++)
+				for (map<string,WeightInfo>::iterator it=train_para_dict.begin();it!=train_para_dict.end();it++)
 				{
 					it->second.acc_weight += it->second.weight*((m_round - it->second.lastround)*LINE + m_line - it->second.lastline);
 					it->second.lastline = m_line;
@@ -59,15 +59,11 @@ void Perceptron::save_model()
 		cerr<<"fail to open model file\n";
 		return;
 	}
-	for(map<vector<int>,WeightInfo>::iterator it=train_para_dict.begin();it!=train_para_dict.end();it++)
+	for(map<string,WeightInfo>::iterator it=train_para_dict.begin();it!=train_para_dict.end();it++)
 	{
 		if (it->second.acc_weight > -1e-10 && it->second.acc_weight < 1e-10)
 			continue;
-		for (size_t i=0;i<it->first.size();i++)
-		{
-			fout<<it->first.at(i)<<'\t';
-		}
-		fout<<it->second.acc_weight/(ROUND*LINE)<<endl;
+		fout<<it->first<<'\t'<<it->second.acc_weight/(ROUND*LINE)<<endl;
 	}
 }
 
@@ -88,7 +84,7 @@ void Perceptron::test(string &test_file)
 	{
 		m_token_matrix_ptr = &(m_token_matrix_list.at(m_line));
 		decode();
-		vector<int> &output_taglist = candlist_old.at(0).taglist;
+		vector<string> &output_taglist = candlist_old.at(0).taglist;
 		for (size_t i=2;i<output_taglist.size();i++)
 		{
 			fout<<m_token_matrix_ptr->at(i).at(0)<<'\t'<<output_taglist.at(i)<<endl;
@@ -112,12 +108,12 @@ void Perceptron::load_validtagset()
 		TrimLine(line);
 		vector<string> toks;
 		Split(toks,line);
-		set<int> validtagset;
+		set<string> validtagset;
 		for (size_t i=1;i<toks.size();i++)
 		{
-			validtagset.insert(s2i(toks.at(i)));
+			validtagset.insert(toks.at(i));
 		}
-		tagset_for_token[s2i(toks.at(0))] = validtagset;
+		tagset_for_token[toks.at(0)] = validtagset;
 	}
 	fin.close();
 
@@ -132,12 +128,12 @@ void Perceptron::load_validtagset()
 		TrimLine(line);
 		vector<string> toks;
 		Split(toks,line);
-		set<int> validtagset;
+		set<string> validtagset;
 		for (size_t i=1;i<toks.size();i++)
 		{
-			validtagset.insert(s2i(toks.at(i)));
+			validtagset.insert(toks.at(i));
 		}
-		tagset_for_last_tag[s2i(toks.at(0))] = validtagset;
+		tagset_for_last_tag[toks.at(0)] = validtagset;
 	}
 	fin.close();
 }
@@ -151,7 +147,7 @@ void Perceptron::load_data(string &data_file)
 		cerr<<"fail to open data file!\n";
 		return;
 	}
-	vector<vector<int> > token_matrix;
+	vector<vector<string> > token_matrix;
 	while(load_block(token_matrix,fin))
 	{
 		m_token_matrix_list.push_back(token_matrix);
@@ -159,11 +155,11 @@ void Perceptron::load_data(string &data_file)
 	cout<<"load data over\n";
 }
 
-bool Perceptron::load_block(vector<vector<int> > &token_matrix, ifstream &fin)
+bool Perceptron::load_block(vector<vector<string> > &token_matrix, ifstream &fin)
 {
 	token_matrix.clear();
 	string line;
-	vector<int> default_token_vec;
+	vector<string> default_token_vec;
 	token_matrix.push_back(default_token_vec);
 	token_matrix.push_back(default_token_vec);
 	size_t n;
@@ -172,21 +168,18 @@ bool Perceptron::load_block(vector<vector<int> > &token_matrix, ifstream &fin)
 		TrimLine(line);
 		if (line.size() == 0)
 		{
-			token_matrix.at(0).resize(n,0);
-			token_matrix.at(1).resize(n,0);
-			token_matrix.push_back(token_matrix.at(0));
-			token_matrix.push_back(token_matrix.at(0));
+			token_matrix.at(0).resize(n,"<s>");
+			token_matrix.at(1).resize(n,"<s>");
+			token_matrix.push_back(default_token_vec);
+			token_matrix.push_back(default_token_vec);
+			token_matrix.at(token_matrix.size()-2).resize(n,"</s>");
+			token_matrix.at(token_matrix.size()-1).resize(n,"</s>");
 			return true;
 		}
 		vector<string> fields;
 		Split(fields,line);
 		n = fields.size();
-		vector<int> token_vec;
-		for (size_t i=0;i<n;i++)
-		{
-			token_vec.push_back(s2i(fields.at(i)));
-		}
-		token_matrix.push_back(token_vec);
+		token_matrix.push_back(fields);
 	}
 	return false;
 }
@@ -197,13 +190,13 @@ void Perceptron::decode_with_update()
 	candlist_old.clear();
 	candlist_new.clear();
 	Cand init_cand;
-	init_cand.taglist.push_back(0);
-	init_cand.taglist.push_back(0);
+	init_cand.taglist.push_back("S");
+	init_cand.taglist.push_back("S");
 	init_cand.acc_score = 0;
 	candlist_old.push_back(init_cand);
 	m_gold_taglist.clear();
-	m_gold_taglist.push_back(0);
-	m_gold_taglist.push_back(0);
+	m_gold_taglist.push_back("S");
+	m_gold_taglist.push_back("S");
 
 	//cout<<"current sentence size: "<<m_token_matrix_ptr->size()-2<<endl;
 	for (cur_pos=2;cur_pos<m_token_matrix_ptr->size()-2;cur_pos++)
@@ -264,12 +257,7 @@ void Perceptron::load_model()
 		TrimLine(line);
 		vector<string> toks;
 		Split(toks,line);
-		vector<int> feature;
-		for (size_t i=0;i<toks.size()-1;i++)
-		{
-			feature.push_back(s2i(toks.at(i)));
-		}
-		test_para_dict[feature] = s2d(toks.at(toks.size()-1));
+		test_para_dict[toks.at(0)] = s2d(toks.at(1));
 	}
 	cout<<"load model over\n";
 }
@@ -279,8 +267,8 @@ void Perceptron::decode()
 	candlist_old.clear();
 	candlist_new.clear();
 	Cand init_cand;
-	init_cand.taglist.push_back(0);
-	init_cand.taglist.push_back(0);
+	init_cand.taglist.push_back("S");
+	init_cand.taglist.push_back("S");
 	init_cand.acc_score = 0;
 	candlist_old.push_back(init_cand);
 
@@ -310,20 +298,20 @@ void Perceptron::decode()
 void Perceptron::expand(vector<Cand> &candvec, const Cand &cand)
 {
 	candvec.clear();
-	int cur_tok_id = m_token_matrix_ptr->at(cur_pos).at(0);
-	set<int> validtagset1;
-	map<int,set<int> >::iterator it = tagset_for_token.find(cur_tok_id);
+	string cur_tok = m_token_matrix_ptr->at(cur_pos).at(0);
+	set<string> validtagset1;
+	map<string,set<string> >::iterator it = tagset_for_token.find(cur_tok);
 	if (it != tagset_for_token.end())
 	{
 		validtagset1 = it->second;
 	}
 	else
 	{
-		validtagset1 = tagset_for_token[-1];
+		validtagset1 = tagset_for_token["unk"];
 	}
 
-	int last_tag = cand.taglist.at(cand.taglist.size()-1);
-	set<int> validtagset2;
+	string last_tag = cand.taglist.at(cand.taglist.size()-1);
+	set<string> validtagset2;
 	it = tagset_for_last_tag.find(last_tag);
 	if (it != tagset_for_last_tag.end())
 	{
@@ -331,10 +319,10 @@ void Perceptron::expand(vector<Cand> &candvec, const Cand &cand)
 	}
 	else
 	{
-		validtagset2 = tagset_for_last_tag[-1];
+		validtagset2 = tagset_for_last_tag["unk"];
 	}
 
-	vector<int> validtagset;
+	vector<string> validtagset;
 	set_intersection(validtagset1.begin(),validtagset1.end(),validtagset2.begin(),validtagset2.end(),back_inserter(validtagset));
 	for (size_t i=0;i<validtagset.size();i++)
 	{
@@ -359,33 +347,22 @@ void Perceptron::expand(vector<Cand> &candvec, const Cand &cand)
 	}
 }
 
-void Perceptron::extract_features(vector<vector<int> > &features, const vector<int> &taglist, size_t feature_extract_pos)
+void Perceptron::extract_features(vector<string> &features, const vector<string> &taglist, size_t feature_extract_pos)
 {
 	features.clear();
 	int arr[] = {-2,-1,0,1,2};
-	vector<int> feature;
+	string feature;
 	for (size_t i=0;i<5;i++)
 	{
-		feature.clear();
-		feature.push_back(i);
-		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+arr[i]).at(0));
-		feature.push_back(taglist.at(feature_extract_pos));
+		feature = i2s(i) + "/" + m_token_matrix_ptr->at(feature_extract_pos+arr[i]).at(0) + taglist.at(feature_extract_pos);
 		features.push_back(feature);
 	}
 	for (size_t i=0;i<4;i++)
 	{
-		feature.push_back(i+5);
-		feature.clear();
-		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+arr[i]).at(0));
-		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+arr[i+1]).at(0));
-		feature.push_back(taglist.at(feature_extract_pos));
+		feature = i2s(i+5) + "/" + m_token_matrix_ptr->at(feature_extract_pos+arr[i]).at(0) + m_token_matrix_ptr->at(feature_extract_pos+arr[i+1]).at(0) + taglist.at(feature_extract_pos);
 		features.push_back(feature);
 	}
-	feature.clear();
-	feature.push_back(9);
-	feature.push_back(m_token_matrix_ptr->at(feature_extract_pos-1).at(0));
-	feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+1).at(0));
-	feature.push_back(taglist.at(feature_extract_pos));
+	feature = "9/" + m_token_matrix_ptr->at(feature_extract_pos-1).at(0) + m_token_matrix_ptr->at(feature_extract_pos+1).at(0) + taglist.at(feature_extract_pos);
 	features.push_back(feature);
 }
 
@@ -426,7 +403,7 @@ void Perceptron::update_paras()
 {
 	for (size_t i=0;i<local_features.size();i++)
 	{
-		map<vector<int>,WeightInfo>::iterator it = train_para_dict.find(local_features.at(i));
+		map<string,WeightInfo>::iterator it = train_para_dict.find(local_features.at(i));
 		if (it == train_para_dict.end())
 		{
 			WeightInfo tmp = {-1,-1,m_line,m_round};
@@ -442,7 +419,7 @@ void Perceptron::update_paras()
 	}
 	for (size_t i=0;i<local_gold_features.size();i++)
 	{
-		map<vector<int>,WeightInfo>::iterator it = train_para_dict.find(local_gold_features.at(i));
+		map<string,WeightInfo>::iterator it = train_para_dict.find(local_gold_features.at(i));
 		if (it == train_para_dict.end())
 		{
 			WeightInfo tmp = {1,1,m_line,m_round};
@@ -450,7 +427,7 @@ void Perceptron::update_paras()
 		}
 		else
 		{
-			it->second.acc_weight += it->second.weight*((m_round-it->second.lastround)*LINE+m_line-it->second.lastline)+1;
+			it->second.acc_weight += it->second.weight*((m_round-it->second.lastround)*LINE+m_line-it->second.lastline) + 1;
 			it->second.weight += 1;
 			it->second.lastline = m_line;
 			it->second.lastround = m_round;
