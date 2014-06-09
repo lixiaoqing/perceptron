@@ -29,8 +29,8 @@ class Perceptron
 	private:
 		void load_validtagset();
 		void load_data(string &data_file);
-		void decode_with_update();
 		bool load_block(vector<vector<string> > &token_matrix, ifstream &fin);
+		void decode_with_update();
 		void save_model();
 
 		void load_model();
@@ -46,17 +46,19 @@ class Perceptron
 		size_t LINE;
 		size_t NGRAM;
 		size_t BEAM_SIZE;
+		string MODE;
 		size_t m_line;
 		size_t m_round;
-		string MODE;
+
 		vector<vector<vector<string> > > m_token_matrix_list;
 		vector<vector<string> > *m_token_matrix_ptr;
 		vector<string> m_gold_taglist;
+		size_t cur_pos;
 		vector<string> local_features;
 		vector<string> local_gold_features;
-		size_t cur_pos;
 		vector<Cand> candlist_old;
 		vector<Cand> candlist_new;
+
 		unordered_map<string, WeightInfo> train_para_dict;
 		unordered_map<string, double> test_para_dict;
 		unordered_map<string, set<string> > tagset_for_token;

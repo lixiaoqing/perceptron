@@ -388,8 +388,8 @@ void Perceptron::add_to_new(const vector<Cand> &candvec)
 				{
 					candlist_new.at(j).taglist = candvec.at(i).taglist;
 					candlist_new.at(j).acc_score = candvec.at(i).acc_score;
-					break;
 				}
+				break;
 			}
 		}
 		if (is_history_same == false)
