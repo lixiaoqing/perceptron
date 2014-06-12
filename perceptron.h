@@ -19,6 +19,14 @@ struct WeightInfo
 	size_t lastround;
 };
 
+struct vechash 
+{
+	size_t operator()(const vector<int>& v) const
+	{
+		return hash_range(v.begin(),v.end());
+	}
+};
+
 class Perceptron
 {
 	public:
@@ -61,8 +69,8 @@ class Perceptron
 		vector<vector<int> > local_features;
 		vector<vector<int> > local_gold_features;
 
-		map<vector<int>, WeightInfo> train_para_dict;
-		map<vector<int>, double> test_para_dict;
-		map<int, set<int> > tagset_for_token;
-		map<int, set<int> > tagset_for_last_tag;
+		unordered_map<vector<int>, WeightInfo, vechash> train_para_dict;
+		unordered_map<vector<int>, double, vechash> test_para_dict;
+		unordered_map<int, set<int> > tagset_for_token;
+		unordered_map<int, set<int> > tagset_for_last_tag;
 };

@@ -33,7 +33,7 @@ void Perceptron::train(string &train_file)
 			decode_with_update();
 			if (m_line == LINE - 1)
 			{
-				for (map<vector<int>,WeightInfo>::iterator it=train_para_dict.begin();it!=train_para_dict.end();it++)
+				for (auto it=train_para_dict.begin();it!=train_para_dict.end();it++)
 				{
 					it->second.acc_weight += it->second.weight*((m_round - it->second.lastround)*LINE + m_line - it->second.lastline);
 					it->second.lastline = m_line;
@@ -60,7 +60,7 @@ void Perceptron::save_model()
 		cerr<<"fail to open model file to write\n";
 		return;
 	}
-	for(map<vector<int>,WeightInfo>::iterator it=train_para_dict.begin();it!=train_para_dict.end();it++)
+	for(auto it=train_para_dict.begin();it!=train_para_dict.end();it++)
 	{
 		if (it->second.acc_weight > -1e-10 && it->second.acc_weight < 1e-10)
 			continue;
@@ -82,14 +82,14 @@ void Perceptron::save_bin_model()
 		return;
 	}
 	size_t feature_num = 0;
-	for(map<vector<int>,WeightInfo>::iterator it=train_para_dict.begin();it!=train_para_dict.end();it++)
+	for(auto it=train_para_dict.begin();it!=train_para_dict.end();it++)
 	{
 		if (it->second.acc_weight > -1e-10 && it->second.acc_weight < 1e-10)
 			continue;
 		feature_num++;
 	}
 	fout.write((char*)&feature_num,sizeof(size_t));
-	for(map<vector<int>,WeightInfo>::iterator it=train_para_dict.begin();it!=train_para_dict.end();it++)
+	for(auto it=train_para_dict.begin();it!=train_para_dict.end();it++)
 	{
 		if (it->second.acc_weight > -1e-10 && it->second.acc_weight < 1e-10)
 			continue;
@@ -368,7 +368,7 @@ void Perceptron::expand(vector<Cand> &candvec, const Cand &cand)
 	candvec.clear();
 	int cur_tok_id = m_token_matrix_ptr->at(cur_pos).at(0);
 	set<int> validtagset1;
-	map<int,set<int> >::iterator it = tagset_for_token.find(cur_tok_id);
+	auto it = tagset_for_token.find(cur_tok_id);
 	if (it != tagset_for_token.end())
 	{
 		validtagset1 = it->second;
@@ -482,7 +482,7 @@ void Perceptron::update_paras()
 {
 	for (size_t i=0;i<local_features.size();i++)
 	{
-		map<vector<int>,WeightInfo>::iterator it = train_para_dict.find(local_features.at(i));
+		auto it = train_para_dict.find(local_features.at(i));
 		if (it == train_para_dict.end())
 		{
 			WeightInfo tmp = {-1,-1,m_line,m_round};
@@ -498,7 +498,7 @@ void Perceptron::update_paras()
 	}
 	for (size_t i=0;i<local_gold_features.size();i++)
 	{
-		map<vector<int>,WeightInfo>::iterator it = train_para_dict.find(local_gold_features.at(i));
+		auto it = train_para_dict.find(local_gold_features.at(i));
 		if (it == train_para_dict.end())
 		{
 			WeightInfo tmp = {1,1,m_line,m_round};
