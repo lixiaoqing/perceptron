@@ -213,9 +213,15 @@ bool Perceptron::load_block(vector<vector<int> > &token_matrix, ifstream &fin)
 		Split(fields,line);
 		field_size = fields.size();
 		vector<int> token_vec;
-		for (auto &e_field : fields)
+		/*
+		for (const auto &e_field : fields)
 		{
 			token_vec.push_back(s2i(e_field));
+		}
+		*/
+		for (size_t i=0;i<field_size;i++)
+		{
+			token_vec.push_back(s2i(fields.at(i)));
 		}
 		token_matrix.push_back(token_vec);
 	}
@@ -231,6 +237,7 @@ void Perceptron::decode_with_update()
 	init_cand.taglist.push_back(0);
 	init_cand.taglist.push_back(0);
 	init_cand.acc_score = 0;
+	init_cand.in_track = true;
 	candlist_old.push_back(init_cand);
 	m_gold_taglist.clear();
 	m_gold_taglist.push_back(0);
@@ -260,7 +267,7 @@ void Perceptron::decode_with_update()
 		bool lose_track = true;
 		for (const auto &e_cand : candlist_old)
 		{
-			if (e_cand.taglist == m_gold_taglist)
+			if (e_cand.in_track == true)
 			{
 				lose_track = false;
 				break;
@@ -338,6 +345,7 @@ void Perceptron::decode()
 	init_cand.taglist.push_back(0);
 	init_cand.taglist.push_back(0);
 	init_cand.acc_score = 0;
+	init_cand.in_track = true;
 	candlist_old.push_back(init_cand);
 
 	//cout<<"current sentence size: "<<m_token_matrix_ptr->size()-2<<endl;
@@ -404,6 +412,14 @@ void Perceptron::expand(vector<Cand> &candvec, const Cand &cand)
 			if (MODE == "train")
 			{
 				local_score += train_para_dict[e_feature].acc_weight;
+				if (e_tag == m_gold_taglist.at(m_gold_taglist.size()-1) && cand.in_track == true)
+				{
+					cand_new.in_track = true;
+				}
+				else
+				{
+					cand_new.in_track = false;
+				}
 			}
 			else
 			{
@@ -445,9 +461,9 @@ void Perceptron::extract_features(vector<vector<int> > &features, const vector<i
 	features.push_back(feature);
 }
 
-void Perceptron::add_to_new(const vector<Cand> &candvec)
+void Perceptron::add_to_new(vector<Cand> &candvec)
 {
-	for (const auto &e_cand : candvec)
+	for (auto &e_cand : candvec)
 	{
 		bool is_history_same = false;
 		for (auto &e_ori_cand : candlist_new)
@@ -465,7 +481,7 @@ void Perceptron::add_to_new(const vector<Cand> &candvec)
 			{
 				if (e_cand.acc_score > e_ori_cand.acc_score)
 				{
-					e_ori_cand.taglist = e_cand.taglist;
+					e_ori_cand.taglist.swap(e_cand.taglist);
 					e_ori_cand.acc_score = e_cand.acc_score;
 				}
 				break;

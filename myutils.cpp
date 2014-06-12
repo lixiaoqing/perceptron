@@ -30,7 +30,7 @@ void TrimLine(string &line)
 	line.erase(line.find_last_not_of(" \t\r\n")+1);
 }
 
-int s2i(string &s)
+int s2i(const string &s)
 {
 	int i;
 	stringstream ss;
@@ -39,7 +39,7 @@ int s2i(string &s)
 	return i;
 }
 
-double s2d(string &s)
+double s2d(const string &s)
 {
 	double d;
 	stringstream ss;
