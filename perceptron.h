@@ -5,7 +5,6 @@ struct Cand
 {
 	vector <int> taglist;
 	double acc_score;
-	bool in_track;
 	bool operator> (const Cand &cand_rhs) const
 	{
 		return (acc_score > cand_rhs.acc_score);
@@ -49,7 +48,7 @@ class Perceptron
 
 		void expand(vector<Cand> &candvec, const Cand &cand);
 		void extract_features(vector<vector<int> > &features, const vector<int> &taglist,size_t feature_extract_pos);
-		void add_to_new(vector<Cand> &candlist);
+		void add_to_new(const vector<Cand> &candlist);
 		void update_paras();
 
 	private:
