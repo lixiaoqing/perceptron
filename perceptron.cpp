@@ -27,17 +27,17 @@ void Perceptron::train(string &train_file)
 	for (m_round=0;m_round<ROUND;m_round++)
 	{
 		random_shuffle(m_token_matrix_list.begin(),m_token_matrix_list.end());
-		for(m_line=0;m_line<LINE;m_line++)
+		for (m_line=0;m_line<LINE;m_line++)
 		{
 			m_token_matrix_ptr = &(m_token_matrix_list.at(m_line));
 			decode_with_update();
 			if (m_line == LINE - 1)
 			{
-				for (auto it=train_para_dict.begin();it!=train_para_dict.end();it++)
+				for (auto &fwp : train_para_dict)
 				{
-					it->second.acc_weight += it->second.weight*((m_round - it->second.lastround)*LINE + m_line - it->second.lastline);
-					it->second.lastline = m_line;
-					it->second.lastround = m_round;
+					fwp.second.acc_weight += fwp.second.weight*((m_round - fwp.second.lastround)*LINE + m_line - fwp.second.lastline);
+					fwp.second.lastline = m_line;
+					fwp.second.lastround = m_round;
 				}
 			}
 			if (m_line%1000 == 0)
@@ -60,15 +60,15 @@ void Perceptron::save_model()
 		cerr<<"fail to open model file to write\n";
 		return;
 	}
-	for(auto it=train_para_dict.begin();it!=train_para_dict.end();it++)
+	for (const auto &fwp : train_para_dict)
 	{
-		if (it->second.acc_weight > -1e-10 && it->second.acc_weight < 1e-10)
+		if (fwp.second.acc_weight > -1e10 && fwp.second.acc_weight< 1e-10)
 			continue;
-		for (size_t i=0;i<it->first.size();i++)
+		for (const auto &v : fwp.first)
 		{
-			fout<<it->first.at(i)<<'\t';
+			fout<<v<<'\t';
 		}
-		fout<<it->second.acc_weight/(ROUND*LINE)<<endl;
+		fout<<fwp.second.acc_weight/(ROUND*LINE)<<endl;
 	}
 	cout<<"save model over\n";
 }
@@ -82,21 +82,21 @@ void Perceptron::save_bin_model()
 		return;
 	}
 	size_t feature_num = 0;
-	for(auto it=train_para_dict.begin();it!=train_para_dict.end();it++)
+	for (const auto &fwp : train_para_dict)
 	{
-		if (it->second.acc_weight > -1e-10 && it->second.acc_weight < 1e-10)
+		if (fwp.second.acc_weight > -1e-10 && fwp.second.acc_weight < 1e-10)
 			continue;
 		feature_num++;
 	}
 	fout.write((char*)&feature_num,sizeof(size_t));
-	for(auto it=train_para_dict.begin();it!=train_para_dict.end();it++)
+	for (const auto &fwp : train_para_dict)
 	{
-		if (it->second.acc_weight > -1e-10 && it->second.acc_weight < 1e-10)
+		if (fwp.second.acc_weight > -1e-10 && fwp.second.acc_weight < 1e-10)
 			continue;
-		size_t len = it->first.size();
+		size_t len = fwp.first.size();
 		fout.write((char*)&len,sizeof(size_t));
-		fout.write((char*)&(it->first.at(0)),sizeof(int)*it->first.size());
-		double weight = it->second.acc_weight/(ROUND*LINE);
+		fout.write((char*)&(fwp.first.at(0)),sizeof(int)*fwp.first.size());
+		double weight = fwp.second.acc_weight/(ROUND*LINE);
 		fout.write((char*)&(weight),sizeof(double));
 	}
 	cout<<"save binary model over\n";
@@ -213,9 +213,9 @@ bool Perceptron::load_block(vector<vector<int> > &token_matrix, ifstream &fin)
 		Split(fields,line);
 		field_size = fields.size();
 		vector<int> token_vec;
-		for (size_t i=0;i<field_size;i++)
+		for (auto &e_field : fields)
 		{
-			token_vec.push_back(s2i(fields.at(i)));
+			token_vec.push_back(s2i(e_field));
 		}
 		token_matrix.push_back(token_vec);
 	}
@@ -241,10 +241,10 @@ void Perceptron::decode_with_update()
 	{
 		size_t len = m_token_matrix_ptr->at(cur_pos).size();
 		m_gold_taglist.push_back(m_token_matrix_ptr->at(cur_pos).at(len-1));
-		for (size_t i=0;i<candlist_old.size();i++)
+		for (const auto &e_cand : candlist_old)
 		{
 			vector<Cand> candvec;
-			expand(candvec,candlist_old.at(i));
+			expand(candvec,e_cand);
 			add_to_new(candvec);
 		}
 
@@ -258,9 +258,9 @@ void Perceptron::decode_with_update()
 		candlist_new.resize(0);
 
 		bool lose_track = true;
-		for (size_t i=0;i<candlist_old.size();i++)
+		for (const auto &e_cand : candlist_old)
 		{
-			if (candlist_old.at(i).taglist == m_gold_taglist)
+			if (e_cand.taglist == m_gold_taglist)
 			{
 				lose_track = false;
 				break;
@@ -344,10 +344,10 @@ void Perceptron::decode()
 	for (cur_pos=2;cur_pos<m_token_matrix_ptr->size()-2;cur_pos++)
 	{
 		size_t len = m_token_matrix_ptr->at(cur_pos).size();
-		for (size_t i=0;i<candlist_old.size();i++)
+		for (const auto &e_cand : candlist_old)
 		{
 			vector<Cand> candvec;
-			expand(candvec,candlist_old.at(i));
+			expand(candvec,e_cand);
 			add_to_new(candvec);
 		}
 
@@ -392,22 +392,22 @@ void Perceptron::expand(vector<Cand> &candvec, const Cand &cand)
 
 	vector<int> validtagset;
 	set_intersection(validtagset1.begin(),validtagset1.end(),validtagset2.begin(),validtagset2.end(),back_inserter(validtagset));
-	for (size_t i=0;i<validtagset.size();i++)
+	for (const auto &e_tag : validtagset)
 	{
 		Cand cand_new;
 		cand_new.taglist = cand.taglist;
-		cand_new.taglist.push_back(validtagset.at(i));
+		cand_new.taglist.push_back(e_tag);
 		double local_score = 0;
 		extract_features(local_features,cand_new.taglist,cur_pos);
-		for (size_t j=0;j<local_features.size();j++)
+		for (const auto &e_feature : local_features)
 		{
 			if (MODE == "train")
 			{
-				local_score += train_para_dict[local_features.at(j)].acc_weight;
+				local_score += train_para_dict[e_feature].acc_weight;
 			}
 			else
 			{
-				local_score += test_para_dict[local_features.at(j)];
+				local_score += test_para_dict[e_feature];
 			}
 		}
 		cand_new.acc_score = cand.acc_score+local_score;
@@ -447,15 +447,15 @@ void Perceptron::extract_features(vector<vector<int> > &features, const vector<i
 
 void Perceptron::add_to_new(const vector<Cand> &candvec)
 {
-	for (size_t i=0;i<candvec.size();i++)
+	for (const auto &e_cand : candvec)
 	{
 		bool is_history_same = false;
-		for (size_t j=0;j<candlist_new.size();j++)
+		for (auto &e_ori_cand : candlist_new)
 		{
 			is_history_same = true;
 			for (size_t k=0;k<NGRAM;k++)
 			{
-				if (candvec.at(i).taglist.at(cur_pos-k) != candlist_new.at(j).taglist.at(cur_pos-k))
+				if (e_cand.taglist.at(cur_pos-k) != e_ori_cand.taglist.at(cur_pos-k))
 				{
 					is_history_same = false;
 					break;
@@ -463,30 +463,30 @@ void Perceptron::add_to_new(const vector<Cand> &candvec)
 			}
 			if (is_history_same == true)
 			{
-				if (candvec.at(i).acc_score > candlist_new.at(j).acc_score)
+				if (e_cand.acc_score > e_ori_cand.acc_score)
 				{
-					candlist_new.at(j).taglist = candvec.at(i).taglist;
-					candlist_new.at(j).acc_score = candvec.at(i).acc_score;
+					e_ori_cand.taglist = e_cand.taglist;
+					e_ori_cand.acc_score = e_cand.acc_score;
 				}
 				break;
 			}
 		}
 		if (is_history_same == false)
 		{
-			candlist_new.push_back(candvec.at(i));
+			candlist_new.push_back(e_cand);
 		}
 	}
 }
 
 void Perceptron::update_paras()
 {
-	for (size_t i=0;i<local_features.size();i++)
+	for (const auto &e_feature : local_features)
 	{
-		auto it = train_para_dict.find(local_features.at(i));
+		auto it = train_para_dict.find(e_feature);
 		if (it == train_para_dict.end())
 		{
 			WeightInfo tmp = {-1,-1,m_line,m_round};
-			train_para_dict.insert(make_pair(local_features.at(i),tmp));
+			train_para_dict.insert(make_pair(e_feature,tmp));
 		}
 		else
 		{
@@ -496,13 +496,14 @@ void Perceptron::update_paras()
 			it->second.lastround = m_round;
 		}
 	}
-	for (size_t i=0;i<local_gold_features.size();i++)
+
+	for (const auto &e_feature : local_gold_features)
 	{
-		auto it = train_para_dict.find(local_gold_features.at(i));
+		auto it = train_para_dict.find(e_feature);
 		if (it == train_para_dict.end())
 		{
 			WeightInfo tmp = {1,1,m_line,m_round};
-			train_para_dict.insert(make_pair(local_gold_features.at(i),tmp));
+			train_para_dict.insert(make_pair(e_feature,tmp));
 		}
 		else
 		{
