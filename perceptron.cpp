@@ -3,16 +3,10 @@
 Perceptron::Perceptron()
 {
 	ROUND = 10;
-	NGRAM = 3;
 	LINE = 1;
-	BEAM_SIZE = 16;
 	m_line = 0;
 	m_round = 0;
 	m_token_matrix_list.clear();
-	m_token_matrix_ptr = NULL;
-	m_gold_taglist.clear();
-	candlist_old.clear();
-	candlist_new.clear();
 	train_para_dict.clear();
 	test_para_dict.clear();
 	tagset_for_token.clear();
@@ -29,8 +23,18 @@ void Perceptron::train(string &train_file)
 		random_shuffle(m_token_matrix_list.begin(),m_token_matrix_list.end());
 		for (m_line=0;m_line<LINE;m_line++)
 		{
-			m_token_matrix_ptr = &(m_token_matrix_list.at(m_line));
-			decode_with_update();
+			BeamDecoder m_decoder(MODE,&(m_token_matrix_list.at(m_line)),this);
+			size_t exit_pos;
+			if(m_decoder.decode_for_train(exit_pos) == false)
+			{
+				for (size_t i=2;i<=exit_pos;i++)
+				{
+					vector<vector<int> > local_features;
+					vector<vector<int> > local_gold_features;
+					m_decoder.get_features_at_pos(local_features,local_gold_features,i);
+					update_paras(local_features,local_gold_features);
+				}
+			}
 			if (m_line == LINE - 1)
 			{
 				for (auto &fwp : train_para_dict)
@@ -117,12 +121,12 @@ void Perceptron::test(string &test_file)
 
 	for(size_t m_line=0;m_line<LINE;m_line++)
 	{
-		m_token_matrix_ptr = &(m_token_matrix_list.at(m_line));
-		decode();
-		vector<int> &output_taglist = candlist_old.at(0).taglist;
+		vector<vector<int> > *cur_line_ptr = &(m_token_matrix_list.at(m_line));
+		BeamDecoder m_decoder(MODE,cur_line_ptr,this);
+		vector<int> &output_taglist = m_decoder.decode();
 		for (size_t i=2;i<output_taglist.size();i++)
 		{
-			fout<<m_token_matrix_ptr->at(i).at(0)<<'\t'<<output_taglist.at(i)<<endl;
+			fout<<cur_line_ptr->at(i).at(0)<<'\t'<<output_taglist.at(i)<<endl;
 		}
 		fout<<endl;
 	}
@@ -213,71 +217,19 @@ bool Perceptron::load_block(vector<vector<int> > &token_matrix, ifstream &fin)
 		Split(fields,line);
 		field_size = fields.size();
 		vector<int> token_vec;
+		for (size_t i=0;i<fields.size();i++)
+		{
+			token_vec.push_back(stoi(fields.at(i)));
+		}
+		/*
 		for (auto &e_field : fields)
 		{
 			token_vec.push_back(stoi(e_field));
 		}
+		*/
 		token_matrix.push_back(token_vec);
 	}
 	return false;
-}
-
-void Perceptron::decode_with_update()
-{
-	//init 
-	candlist_old.clear();
-	candlist_new.clear();
-	Cand init_cand;
-	init_cand.taglist.push_back(0);
-	init_cand.taglist.push_back(0);
-	init_cand.acc_score = 0;
-	candlist_old.push_back(init_cand);
-	m_gold_taglist.clear();
-	m_gold_taglist.push_back(0);
-	m_gold_taglist.push_back(0);
-
-	//cout<<"current sentence size: "<<m_token_matrix_ptr->size()-2<<endl;
-	for (cur_pos=2;cur_pos<m_token_matrix_ptr->size()-2;cur_pos++)
-	{
-		size_t len = m_token_matrix_ptr->at(cur_pos).size();
-		m_gold_taglist.push_back(m_token_matrix_ptr->at(cur_pos).at(len-1));
-		for (const auto &e_cand : candlist_old)
-		{
-			vector<Cand> candvec;
-			expand(candvec,e_cand);
-			add_to_new(candvec);
-		}
-
-		sort(candlist_new.begin(),candlist_new.end(),greater<Cand>());
-
-		candlist_old.swap(candlist_new);
-		if (candlist_old.size() > BEAM_SIZE)
-		{
-			candlist_old.resize(BEAM_SIZE);
-		}
-		candlist_new.resize(0);
-
-		bool lose_track = true;
-		for (const auto &e_cand : candlist_old)
-		{
-			if (e_cand.taglist == m_gold_taglist)
-			{
-				lose_track = false;
-				break;
-			}
-		}
-		if (lose_track == true)
-		{
-			for (size_t i=2;i<=cur_pos;i++)
-			{
-				extract_features(local_features,candlist_old.at(0).taglist,i);
-				extract_features(local_gold_features,m_gold_taglist,i);
-				update_paras();
-			}
-			break;
-		}
-		//cout<<"decoding at pos "<<cur_pos-2<<endl;
-	}
 }
 
 void Perceptron::load_model()
@@ -330,155 +282,7 @@ void Perceptron::load_bin_model()
 	cout<<"load binary model over\n";
 }
 
-void Perceptron::decode()
-{
-	candlist_old.clear();
-	candlist_new.clear();
-	Cand init_cand;
-	init_cand.taglist.push_back(0);
-	init_cand.taglist.push_back(0);
-	init_cand.acc_score = 0;
-	candlist_old.push_back(init_cand);
-
-	//cout<<"current sentence size: "<<m_token_matrix_ptr->size()-2<<endl;
-	for (cur_pos=2;cur_pos<m_token_matrix_ptr->size()-2;cur_pos++)
-	{
-		size_t len = m_token_matrix_ptr->at(cur_pos).size();
-		for (const auto &e_cand : candlist_old)
-		{
-			vector<Cand> candvec;
-			expand(candvec,e_cand);
-			add_to_new(candvec);
-		}
-
-		sort(candlist_new.begin(),candlist_new.end(),greater<Cand>());
-
-		candlist_old.swap(candlist_new);
-		if (candlist_old.size() > BEAM_SIZE)
-		{
-			candlist_old.resize(BEAM_SIZE);
-		}
-		candlist_new.resize(0);
-		//cout<<"decoding at pos "<<cur_pos-2<<endl;
-	}
-}
-
-void Perceptron::expand(vector<Cand> &candvec, const Cand &cand)
-{
-	candvec.clear();
-	int cur_tok_id = m_token_matrix_ptr->at(cur_pos).at(0);
-	set<int> validtagset1;
-	auto it = tagset_for_token.find(cur_tok_id);
-	if (it != tagset_for_token.end())
-	{
-		validtagset1 = it->second;
-	}
-	else
-	{
-		validtagset1 = tagset_for_token[-1];
-	}
-
-	int last_tag = cand.taglist.at(cand.taglist.size()-1);
-	set<int> validtagset2;
-	it = tagset_for_last_tag.find(last_tag);
-	if (it != tagset_for_last_tag.end())
-	{
-		validtagset2 = it->second;
-	}
-	else
-	{
-		validtagset2 = tagset_for_last_tag[-1];
-	}
-
-	vector<int> validtagset;
-	set_intersection(validtagset1.begin(),validtagset1.end(),validtagset2.begin(),validtagset2.end(),back_inserter(validtagset));
-	for (const auto &e_tag : validtagset)
-	{
-		Cand cand_new;
-		cand_new.taglist = cand.taglist;
-		cand_new.taglist.push_back(e_tag);
-		double local_score = 0;
-		extract_features(local_features,cand_new.taglist,cur_pos);
-		for (const auto &e_feature : local_features)
-		{
-			if (MODE == "train")
-			{
-				local_score += train_para_dict[e_feature].acc_weight;
-			}
-			else
-			{
-				local_score += test_para_dict[e_feature];
-			}
-		}
-		cand_new.acc_score = cand.acc_score+local_score;
-		candvec.push_back(cand_new);
-	}
-}
-
-void Perceptron::extract_features(vector<vector<int> > &features, const vector<int> &taglist, size_t feature_extract_pos)
-{
-	features.clear();
-	int arr[] = {-2,-1,0,1,2};
-	vector<int> feature;
-	for (size_t i=0;i<5;i++)
-	{
-		feature.clear();
-		feature.push_back(i);
-		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+arr[i]).at(0));
-		feature.push_back(taglist.at(feature_extract_pos));
-		features.push_back(feature);
-	}
-	for (size_t i=0;i<4;i++)
-	{
-		feature.clear();
-		feature.push_back(i+5);
-		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+arr[i]).at(0));
-		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+arr[i+1]).at(0));
-		feature.push_back(taglist.at(feature_extract_pos));
-		features.push_back(feature);
-	}
-	feature.clear();
-	feature.push_back(9);
-	feature.push_back(m_token_matrix_ptr->at(feature_extract_pos-1).at(0));
-	feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+1).at(0));
-	feature.push_back(taglist.at(feature_extract_pos));
-	features.push_back(feature);
-}
-
-void Perceptron::add_to_new(const vector<Cand> &candvec)
-{
-	for (const auto &e_cand : candvec)
-	{
-		bool is_history_same = false;
-		for (auto &e_ori_cand : candlist_new)
-		{
-			is_history_same = true;
-			for (size_t k=0;k<NGRAM;k++)
-			{
-				if (e_cand.taglist.at(cur_pos-k) != e_ori_cand.taglist.at(cur_pos-k))
-				{
-					is_history_same = false;
-					break;
-				}
-			}
-			if (is_history_same == true)
-			{
-				if (e_cand.acc_score > e_ori_cand.acc_score)
-				{
-					e_ori_cand.taglist = e_cand.taglist;
-					e_ori_cand.acc_score = e_cand.acc_score;
-				}
-				break;
-			}
-		}
-		if (is_history_same == false)
-		{
-			candlist_new.push_back(e_cand);
-		}
-	}
-}
-
-void Perceptron::update_paras()
+void Perceptron::update_paras(const vector<vector<int> > &local_features, const vector<vector<int> > &local_gold_features)
 {
 	for (const auto &e_feature : local_features)
 	{
@@ -513,6 +317,223 @@ void Perceptron::update_paras()
 			it->second.lastround = m_round;
 		}
 	}
+}
+
+void Perceptron::get_validtagset(vector<int> &validtagset, int cur_tok_id, int last_tag)
+{
+	validtagset.clear();
+	set<int> validtagset1;
+	auto it = tagset_for_token.find(cur_tok_id);
+	if (it != tagset_for_token.end())
+	{
+		validtagset1 = it->second;
+	}
+	else
+	{
+		validtagset1 = tagset_for_token[-1];
+	}
+
+	set<int> validtagset2;
+	it = tagset_for_last_tag.find(last_tag);
+	if (it != tagset_for_last_tag.end())
+	{
+		validtagset2 = it->second;
+	}
+	else
+	{
+		validtagset2 = tagset_for_last_tag[-1];
+	}
+	set_intersection(validtagset1.begin(),validtagset1.end(),validtagset2.begin(),validtagset2.end(),back_inserter(validtagset));
+}
+
+double Perceptron::cal_local_score(const vector<vector<int> > &local_features)
+{
+	double local_score = 0;
+	for (const auto &e_feature : local_features)
+	{
+		if (MODE == "train")
+		{
+			local_score += train_para_dict[e_feature].acc_weight;
+		}
+		else
+		{
+			local_score += test_para_dict[e_feature];
+		}
+	}
+	return local_score;
+}
+
+BeamDecoder::BeamDecoder(string &mode,vector<vector<int> > *cur_line_ptr,Perceptron *pcpt)
+{
+	m_pcpt = pcpt;
+	BEAM_SIZE = 16;
+	MODE = mode;
+	NGRAM = 3;
+	m_token_matrix_ptr = cur_line_ptr;
+	candlist_old.clear();
+	candlist_new.clear();
+	Cand init_cand;
+	init_cand.taglist.push_back(0);
+	init_cand.taglist.push_back(0);
+	init_cand.acc_score = 0;
+	candlist_old.push_back(init_cand);
+	if (mode == "train")
+	{
+		m_gold_taglist.clear();
+		m_gold_taglist.push_back(0);
+		m_gold_taglist.push_back(0);
+	}
+}
+
+bool BeamDecoder::decode_for_train(size_t &exit_pos)
+{
+	//cout<<"current sentence size: "<<m_token_matrix_ptr->size()-2<<endl;
+	for (cur_pos=2;cur_pos<m_token_matrix_ptr->size()-2;cur_pos++)
+	{
+		size_t len = m_token_matrix_ptr->at(cur_pos).size();
+		m_gold_taglist.push_back(m_token_matrix_ptr->at(cur_pos).at(len-1));
+		for (const auto &e_cand : candlist_old)
+		{
+			vector<Cand> candvec;
+			expand(candvec,e_cand);
+			add_to_new(candvec);
+		}
+
+		sort(candlist_new.begin(),candlist_new.end(),greater<Cand>());
+
+		candlist_old.swap(candlist_new);
+		if (candlist_old.size() > BEAM_SIZE)
+		{
+			candlist_old.resize(BEAM_SIZE);
+		}
+		candlist_new.resize(0);
+
+		bool lose_track = true;
+		for (const auto &e_cand : candlist_old)
+		{
+			if (e_cand.taglist == m_gold_taglist)
+			{
+				lose_track = false;
+				break;
+			}
+		}
+		if (lose_track == true)
+		{
+			exit_pos = cur_pos;
+			return false;
+		}
+		//cout<<"decoding at pos "<<cur_pos-2<<endl;
+	}
+	return true;
+}
+
+vector<int>& BeamDecoder::decode()
+{
+	//cout<<"current sentence size: "<<m_token_matrix_ptr->size()-2<<endl;
+	for (cur_pos=2;cur_pos<m_token_matrix_ptr->size()-2;cur_pos++)
+	{
+		size_t len = m_token_matrix_ptr->at(cur_pos).size();
+		for (const auto &e_cand : candlist_old)
+		{
+			vector<Cand> candvec;
+			expand(candvec,e_cand);
+			add_to_new(candvec);
+		}
+
+		sort(candlist_new.begin(),candlist_new.end(),greater<Cand>());
+
+		candlist_old.swap(candlist_new);
+		if (candlist_old.size() > BEAM_SIZE)
+		{
+			candlist_old.resize(BEAM_SIZE);
+		}
+		candlist_new.resize(0);
+		//cout<<"decoding at pos "<<cur_pos-2<<endl;
+	}
+	return candlist_old.at(0).taglist;
+}
+
+void BeamDecoder::expand(vector<Cand> &candvec, const Cand &cand)
+{
+	candvec.clear();
+	int cur_tok_id = m_token_matrix_ptr->at(cur_pos).at(0);
+	int last_tag = cand.taglist.at(cand.taglist.size()-1);
+	vector<int> validtagset;
+	m_pcpt->get_validtagset(validtagset,cur_tok_id,last_tag);
+
+	for (const auto &e_tag : validtagset)
+	{
+		Cand cand_new;
+		cand_new.taglist = cand.taglist;
+		cand_new.taglist.push_back(e_tag);
+		extract_features(m_local_features,cand_new.taglist,cur_pos);
+		double local_score = m_pcpt->cal_local_score(m_local_features);
+		cand_new.acc_score = cand.acc_score+local_score;
+		candvec.push_back(cand_new);
+	}
+}
+
+void BeamDecoder::add_to_new(const vector<Cand> &candvec)
+{
+	for (const auto &e_cand : candvec)
+	{
+		bool is_history_same = false;
+		for (auto &e_ori_cand : candlist_new)
+		{
+			is_history_same = true;
+			for (size_t k=0;k<NGRAM;k++)
+			{
+				if (e_cand.taglist.at(cur_pos-k) != e_ori_cand.taglist.at(cur_pos-k))
+				{
+					is_history_same = false;
+					break;
+				}
+			}
+			if (is_history_same == true)
+			{
+				if (e_cand.acc_score > e_ori_cand.acc_score)
+				{
+					e_ori_cand.taglist = e_cand.taglist;
+					e_ori_cand.acc_score = e_cand.acc_score;
+				}
+				break;
+			}
+		}
+		if (is_history_same == false)
+		{
+			candlist_new.push_back(e_cand);
+		}
+	}
+}
+
+void BeamDecoder::extract_features(vector<vector<int> > &features, const vector<int> &taglist, size_t feature_extract_pos)
+{
+	features.clear();
+	int arr[] = {-2,-1,0,1,2};
+	vector<int> feature;
+	for (size_t i=0;i<5;i++)
+	{
+		feature.clear();
+		feature.push_back(i);
+		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+arr[i]).at(0));
+		feature.push_back(taglist.at(feature_extract_pos));
+		features.push_back(feature);
+	}
+	for (size_t i=0;i<4;i++)
+	{
+		feature.clear();
+		feature.push_back(i+5);
+		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+arr[i]).at(0));
+		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+arr[i+1]).at(0));
+		feature.push_back(taglist.at(feature_extract_pos));
+		features.push_back(feature);
+	}
+	feature.clear();
+	feature.push_back(9);
+	feature.push_back(m_token_matrix_ptr->at(feature_extract_pos-1).at(0));
+	feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+1).at(0));
+	feature.push_back(taglist.at(feature_extract_pos));
+	features.push_back(feature);
 }
 
 int main(int argc, char *argv[])
