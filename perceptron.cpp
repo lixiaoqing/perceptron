@@ -23,7 +23,7 @@ void Perceptron::train(string &train_file)
 		random_shuffle(m_token_matrix_list.begin(),m_token_matrix_list.end());
 		for (m_line=0;m_line<LINE;m_line++)
 		{
-			BeamDecoder m_decoder(MODE,&(m_token_matrix_list.at(m_line)),this);
+			BeamSearchDecoder m_decoder(MODE,&(m_token_matrix_list.at(m_line)),this);
 			size_t exit_pos;
 			if(m_decoder.decode_for_train(exit_pos) == false)
 			{
@@ -122,7 +122,7 @@ void Perceptron::test(string &test_file)
 	for(size_t m_line=0;m_line<LINE;m_line++)
 	{
 		vector<vector<int> > *cur_line_ptr = &(m_token_matrix_list.at(m_line));
-		BeamDecoder m_decoder(MODE,cur_line_ptr,this);
+		BeamSearchDecoder m_decoder(MODE,cur_line_ptr,this);
 		vector<int> &output_taglist = m_decoder.decode();
 		for (size_t i=2;i<output_taglist.size();i++)
 		{
@@ -363,12 +363,10 @@ double Perceptron::cal_local_score(const vector<vector<int> > &local_features)
 	return local_score;
 }
 
-BeamDecoder::BeamDecoder(string &mode,vector<vector<int> > *cur_line_ptr,Perceptron *pcpt)
+Perceptron::BeamSearchDecoder::BeamSearchDecoder(string &mode,vector<vector<int> > *cur_line_ptr,Perceptron *pcpt)
 {
 	m_pcpt = pcpt;
-	BEAM_SIZE = 16;
 	MODE = mode;
-	NGRAM = 3;
 	m_token_matrix_ptr = cur_line_ptr;
 	candlist_old.clear();
 	candlist_new.clear();
@@ -385,7 +383,7 @@ BeamDecoder::BeamDecoder(string &mode,vector<vector<int> > *cur_line_ptr,Percept
 	}
 }
 
-bool BeamDecoder::decode_for_train(size_t &exit_pos)
+bool Perceptron::BeamSearchDecoder::decode_for_train(size_t &exit_pos)
 {
 	//cout<<"current sentence size: "<<m_token_matrix_ptr->size()-2<<endl;
 	for (cur_pos=2;cur_pos<m_token_matrix_ptr->size()-2;cur_pos++)
@@ -427,7 +425,7 @@ bool BeamDecoder::decode_for_train(size_t &exit_pos)
 	return true;
 }
 
-vector<int>& BeamDecoder::decode()
+vector<int>& Perceptron::BeamSearchDecoder::decode()
 {
 	//cout<<"current sentence size: "<<m_token_matrix_ptr->size()-2<<endl;
 	for (cur_pos=2;cur_pos<m_token_matrix_ptr->size()-2;cur_pos++)
@@ -453,7 +451,7 @@ vector<int>& BeamDecoder::decode()
 	return candlist_old.at(0).taglist;
 }
 
-void BeamDecoder::expand(vector<Cand> &candvec, const Cand &cand)
+void Perceptron::BeamSearchDecoder::expand(vector<Cand> &candvec, const Cand &cand)
 {
 	candvec.clear();
 	int cur_tok_id = m_token_matrix_ptr->at(cur_pos).at(0);
@@ -466,6 +464,7 @@ void BeamDecoder::expand(vector<Cand> &candvec, const Cand &cand)
 		Cand cand_new;
 		cand_new.taglist = cand.taglist;
 		cand_new.taglist.push_back(e_tag);
+		vector<vector<int> > m_local_features;
 		extract_features(m_local_features,cand_new.taglist,cur_pos);
 		double local_score = m_pcpt->cal_local_score(m_local_features);
 		cand_new.acc_score = cand.acc_score+local_score;
@@ -473,7 +472,7 @@ void BeamDecoder::expand(vector<Cand> &candvec, const Cand &cand)
 	}
 }
 
-void BeamDecoder::add_to_new(const vector<Cand> &candvec)
+void Perceptron::BeamSearchDecoder::add_to_new(const vector<Cand> &candvec)
 {
 	for (const auto &e_cand : candvec)
 	{
@@ -506,7 +505,7 @@ void BeamDecoder::add_to_new(const vector<Cand> &candvec)
 	}
 }
 
-void BeamDecoder::extract_features(vector<vector<int> > &features, const vector<int> &taglist, size_t feature_extract_pos)
+void Perceptron::BeamSearchDecoder::extract_features(vector<vector<int> > &features, const vector<int> &taglist, size_t feature_extract_pos)
 {
 	features.clear();
 	int arr[] = {-2,-1,0,1,2};
