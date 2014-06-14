@@ -79,11 +79,12 @@ class Perceptron
 				void extract_features(vector<vector<int> > &features, const vector<int> &taglist,size_t feature_extract_pos);
 				void expand(vector<Cand> &candvec, const Cand &cand);
 				void add_to_new(const vector<Cand> &candlist);
+				bool check_is_history_same(const Cand &cand0, const Cand &cand1);
 
 			private:
 				Perceptron *m_pcpt;
 				const static size_t BEAM_SIZE = 16;
-				const static size_t NGRAM = 3;
+				const static size_t NGRAM = 2;
 				string MODE;
 				vector<vector<int> > *m_token_matrix_ptr;
 				vector<Cand> candlist_old;

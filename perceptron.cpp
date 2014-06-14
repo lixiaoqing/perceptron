@@ -2,7 +2,7 @@
 
 Perceptron::Perceptron()
 {
-	ROUND = 10;
+	ROUND = 20;
 	LINE = 1;
 	m_line = 0;
 	m_round = 0;
@@ -353,7 +353,7 @@ double Perceptron::cal_local_score(const vector<vector<int> > &local_features)
 	{
 		if (MODE == "train")
 		{
-			local_score += train_para_dict[e_feature].acc_weight;
+			local_score += train_para_dict[e_feature].weight;
 		}
 		else
 		{
@@ -472,6 +472,18 @@ void Perceptron::BeamSearchDecoder::expand(vector<Cand> &candvec, const Cand &ca
 	}
 }
 
+bool Perceptron::BeamSearchDecoder::check_is_history_same(const Cand &cand0, const Cand &cand1)
+{
+	for (size_t k=0;k<NGRAM;k++)
+	{
+		if (cand0.taglist.at(cur_pos-k) != cand1.taglist.at(cur_pos-k))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 void Perceptron::BeamSearchDecoder::add_to_new(const vector<Cand> &candvec)
 {
 	for (const auto &e_cand : candvec)
@@ -479,15 +491,7 @@ void Perceptron::BeamSearchDecoder::add_to_new(const vector<Cand> &candvec)
 		bool is_history_same = false;
 		for (auto &e_ori_cand : candlist_new)
 		{
-			is_history_same = true;
-			for (size_t k=0;k<NGRAM;k++)
-			{
-				if (e_cand.taglist.at(cur_pos-k) != e_ori_cand.taglist.at(cur_pos-k))
-				{
-					is_history_same = false;
-					break;
-				}
-			}
+			is_history_same = check_is_history_same(e_cand,e_ori_cand);
 			if (is_history_same == true)
 			{
 				if (e_cand.acc_score > e_ori_cand.acc_score)
@@ -505,6 +509,8 @@ void Perceptron::BeamSearchDecoder::add_to_new(const vector<Cand> &candvec)
 	}
 }
 
+/*
+*/
 void Perceptron::BeamSearchDecoder::extract_features(vector<vector<int> > &features, const vector<int> &taglist, size_t feature_extract_pos)
 {
 	features.clear();
@@ -534,6 +540,102 @@ void Perceptron::BeamSearchDecoder::extract_features(vector<vector<int> > &featu
 	feature.push_back(taglist.at(feature_extract_pos));
 	features.push_back(feature);
 }
+
+/*
+void Perceptron::BeamSearchDecoder::extract_features(vector<vector<int> > &features, const vector<int> &taglist, size_t feature_extract_pos)
+{
+	features.clear();
+	if (taglist.at(feature_extract_pos) == 0)
+	{
+		auto pw_begin_it = find(taglist.rend()-feature_extract_pos,taglist.rend(),0);
+		size_t pw_begin = taglist.rend() - 1 - pw_begin_it;
+		size_t pw_end = feature_extract_pos - 1;
+		size_t ppw_begin = taglist.rend() -1 - find(pw_begin_it+1,taglist.rend(),0);
+		size_t ppw_end = pw_begin-1;
+
+		vector<int> feature;
+		feature.push_back(1);
+		for (size_t pos=pw_begin;pos<=pw_end;pos++)
+		{
+			feature.push_back(m_token_matrix_ptr->at(pos).at(0));
+		}
+		features.push_back(feature);
+
+		size_t pw_len = pw_end - pw_begin + 1;
+		if (pw_len == 1)
+		{
+			feature.at(0) = 2;
+			features.push_back(feature);
+		}
+
+		feature.at(0) = 3;
+		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos).at(0));
+		features.push_back(feature);
+
+		feature.at(0) = 4;
+		feature.at(feature.size()-1) = m_token_matrix_ptr->at(ppw_end).at(0);
+		features.push_back(feature);
+
+		size_t ppw_len = ppw_end - ppw_begin + 1;
+		feature.at(0) = 5;
+		feature.at(feature.size()-1) = ppw_len;
+		features.push_back(feature);
+
+		feature.at(0) = 6;
+		feature.at(feature.size()-1) = 0;
+		for (size_t pos=ppw_begin;pos<=ppw_end;pos++)
+		{
+			feature.push_back(m_token_matrix_ptr->at(pos).at(0));
+		}
+		features.push_back(feature);
+
+		feature.clear();
+		feature.push_back(7);
+		feature.push_back(m_token_matrix_ptr->at(pw_begin).at(0));
+		feature.push_back(pw_len);
+		features.push_back(feature);
+
+		feature.at(0) = 8;
+		feature.at(1) = m_token_matrix_ptr->at(pw_end).at(0);
+		features.push_back(feature);
+
+		feature.at(0) = 9;
+		feature.at(2) = m_token_matrix_ptr->at(feature_extract_pos).at(0);
+		features.push_back(feature);
+
+		feature.at(0) = 10;
+		feature.at(1) = m_token_matrix_ptr->at(pw_begin).at(0);
+		feature.at(2) = m_token_matrix_ptr->at(pw_end).at(0);
+		features.push_back(feature);
+
+		feature.at(0) = 11;
+		feature.at(2) = m_token_matrix_ptr->at(feature_extract_pos).at(0);
+		features.push_back(feature);
+
+		feature.at(0) = 12;
+		feature.at(1) = m_token_matrix_ptr->at(ppw_end).at(0);
+		feature.at(2) = m_token_matrix_ptr->at(pw_end).at(0);
+		features.push_back(feature);
+
+		feature.clear();
+		feature.push_back(13);
+		for (size_t pos=ppw_begin;pos<=ppw_end;pos++)
+		{
+			feature.push_back(m_token_matrix_ptr->at(pos).at(0));
+		}
+		feature.push_back(pw_len);
+		features.push_back(feature);
+	}
+	else
+	{
+		vector<int> feature;
+		feature.push_back(14);
+		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos-1).at(0));
+		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos).at(0));
+		features.push_back(feature);
+	}
+}
+*/
 
 int main(int argc, char *argv[])
 {
