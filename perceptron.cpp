@@ -403,7 +403,7 @@ void Perceptron::expand(vector<Cand> &candvec, const Cand &cand)
 		{
 			if (MODE == "train")
 			{
-				local_score += train_para_dict[local_features.at(j)].acc_weight;
+				local_score += train_para_dict[local_features.at(j)].weight;
 			}
 			else
 			{
