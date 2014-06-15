@@ -50,9 +50,10 @@ void Perceptron::train(string &train_file)
 			}
 		}
 		cout<<"round "<<m_round<<endl;
+		save_bin_model();
 	}
 	//save_model();
-	save_bin_model();
+	//save_bin_model();
 }
 
 void Perceptron::save_model()
@@ -79,7 +80,7 @@ void Perceptron::save_model()
 
 void Perceptron::save_bin_model()
 {
-	ofstream fout("model.bin",ios::binary);
+	ofstream fout("model.bin."+to_string(m_round),ios::binary);
 	if (!fout.is_open())
 	{
 		cerr<<"fail to open binary model file to write!\n";
@@ -489,6 +490,8 @@ void Perceptron::BeamSearchDecoder::add_to_new(const vector<Cand> &candvec)
 	for (const auto &e_cand : candvec)
 	{
 		bool is_history_same = false;
+		/*
+		*/
 		for (auto &e_ori_cand : candlist_new)
 		{
 			is_history_same = check_is_history_same(e_cand,e_ori_cand);

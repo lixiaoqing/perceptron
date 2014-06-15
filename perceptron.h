@@ -23,7 +23,10 @@ struct vechash
 {
 	size_t operator()(const vector<int>& v) const
 	{
-		return hash_range(v.begin(),v.end());
+		//return hash_range(v.begin(),v.end());
+		return fnv1_hash(v);
+		//return djb2_hash(v);
+		//return bkdr_hash(v);
 	}
 };
 

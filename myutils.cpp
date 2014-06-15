@@ -55,3 +55,37 @@ string i2s(int i)
 	return ss.str();
 }
 
+size_t fnv1_hash(const vector<int> &ivec)
+{
+	size_t hash = 2166136261;
+	for (auto &i : ivec)
+	{
+		hash *= 16777619;
+		hash ^= i;
+	}
+	return hash;
+}
+
+size_t djb2_hash(const vector<int> &ivec)
+{
+	size_t hash = 5381;
+
+	for (auto &i : ivec)
+	{
+		hash = ((hash << 5) + hash) + i; /* hash * 33 + c */
+	}
+	return hash;
+}
+
+size_t bkdr_hash(const vector<int> &ivec)
+{
+	//size_t seed = 131; // 31 131 1313 13131 131313 etc..
+	size_t hash = 0;
+
+	for (auto &i : ivec)
+	{
+		hash = hash * 131 + i;
+	}
+	return (hash & 0x7FFFFFFF);
+}
+
