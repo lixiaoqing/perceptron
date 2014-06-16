@@ -226,7 +226,7 @@ bool Perceptron::load_block(vector<vector<int> > &token_matrix, ifstream &fin)
 		Split(fields,line);
 		field_size = fields.size();
 		vector<int> token_vec;
-		for (size_t i=0;i<fields.size();i++)
+		for (size_t i=0;i<field_size;i++)
 		{
 			token_vec.push_back(stoi(fields.at(i)));
 		}
