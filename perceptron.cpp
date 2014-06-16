@@ -120,14 +120,22 @@ void Perceptron::test(string &test_file)
 		return;
 	}
 
+	vector<vector<int> > outputs;
+	outputs.resize(LINE);
+#pragma omp parallel for
 	for(size_t m_line=0;m_line<LINE;m_line++)
 	{
 		vector<vector<int> > *cur_line_ptr = &(m_token_matrix_list.at(m_line));
 		BeamSearchDecoder m_decoder(MODE,cur_line_ptr,this);
-		vector<int> &output_taglist = m_decoder.decode();
-		for (size_t i=2;i<output_taglist.size();i++)
+		outputs.at(m_line) = m_decoder.decode();
+	}
+
+	for(size_t m_line=0;m_line<LINE;m_line++)
+	{
+		vector<vector<int> > *cur_line_ptr = &(m_token_matrix_list.at(m_line));
+		for (size_t i=2;i<outputs.at(m_line).size();i++)
 		{
-			fout<<cur_line_ptr->at(i).at(0)<<'\t'<<output_taglist.at(i)<<endl;
+			fout<<cur_line_ptr->at(i).at(0)<<'\t'<<outputs.at(m_line).at(i)<<endl;
 		}
 		fout<<endl;
 	}
@@ -426,7 +434,7 @@ bool Perceptron::BeamSearchDecoder::decode_for_train(size_t &exit_pos)
 	return true;
 }
 
-vector<int>& Perceptron::BeamSearchDecoder::decode()
+vector<int> Perceptron::BeamSearchDecoder::decode()
 {
 	//cout<<"current sentence size: "<<m_token_matrix_ptr->size()-2<<endl;
 	for (cur_pos=2;cur_pos<m_token_matrix_ptr->size()-2;cur_pos++)

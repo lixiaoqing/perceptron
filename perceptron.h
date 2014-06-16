@@ -75,7 +75,7 @@ class Perceptron
 			public:
 				BeamSearchDecoder(string &mode,vector<vector<int> > *cur_line_ptr,Perceptron *pcpt);
 				bool decode_for_train(size_t &exit_pos);
-				vector<int>& decode();
+				vector<int> decode();
 
 				void get_features_at_pos(vector<vector<int> > &local_features,vector<vector<int> > &local_gold_features,size_t pos) {extract_features(local_features,candlist_old.at(0).taglist,pos);extract_features(local_gold_features,m_gold_taglist,pos);};
 			private:
