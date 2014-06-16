@@ -77,10 +77,10 @@ class Perceptron
 				bool decode_for_train(size_t &exit_pos);
 				vector<int> decode();
 
-				void get_features_at_pos(vector<vector<int> > &local_features,vector<vector<int> > &local_gold_features,size_t pos) {extract_features(local_features,candlist_old.at(0).taglist,pos);extract_features(local_gold_features,m_gold_taglist,pos);};
+				void get_features_at_pos(vector<vector<int> > &local_features,vector<vector<int> > &local_gold_features,size_t pos) {local_features = extract_features(candlist_old.at(0).taglist,pos);local_gold_features = extract_features(m_gold_taglist,pos);};
 			private:
-				void extract_features(vector<vector<int> > &features, const vector<int> &taglist,size_t feature_extract_pos);
-				void expand(vector<Cand> &candvec, const Cand &cand);
+				vector<vector<int> > extract_features(const vector<int> &taglist,size_t feature_extract_pos);
+				vector<Cand> expand(const Cand &cand);
 				void add_to_new(const vector<Cand> &candlist);
 				bool check_is_history_same(const Cand &cand0, const Cand &cand1);
 

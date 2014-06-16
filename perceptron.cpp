@@ -122,7 +122,7 @@ void Perceptron::test(string &test_file)
 
 	vector<vector<int> > outputs;
 	outputs.resize(LINE);
-#pragma omp parallel for
+//#pragma omp parallel for
 	for(size_t m_line=0;m_line<LINE;m_line++)
 	{
 		vector<vector<int> > *cur_line_ptr = &(m_token_matrix_list.at(m_line));
@@ -401,8 +401,7 @@ bool Perceptron::BeamSearchDecoder::decode_for_train(size_t &exit_pos)
 		m_gold_taglist.push_back(m_token_matrix_ptr->at(cur_pos).at(len-1));
 		for (const auto &e_cand : candlist_old)
 		{
-			vector<Cand> candvec;
-			expand(candvec,e_cand);
+			vector<Cand> candvec = expand(e_cand);
 			add_to_new(candvec);
 		}
 
@@ -442,8 +441,7 @@ vector<int> Perceptron::BeamSearchDecoder::decode()
 		size_t len = m_token_matrix_ptr->at(cur_pos).size();
 		for (const auto &e_cand : candlist_old)
 		{
-			vector<Cand> candvec;
-			expand(candvec,e_cand);
+			vector<Cand> candvec = expand(e_cand);
 			add_to_new(candvec);
 		}
 
@@ -460,9 +458,10 @@ vector<int> Perceptron::BeamSearchDecoder::decode()
 	return candlist_old.at(0).taglist;
 }
 
-void Perceptron::BeamSearchDecoder::expand(vector<Cand> &candvec, const Cand &cand)
+vector<Cand> Perceptron::BeamSearchDecoder::expand(const Cand &cand)
 {
-	candvec.clear();
+
+	vector<Cand> candvec;
 	int cur_tok_id = m_token_matrix_ptr->at(cur_pos).at(0);
 	int last_tag = cand.taglist.at(cand.taglist.size()-1);
 	vector<int> validtagset;
@@ -473,12 +472,12 @@ void Perceptron::BeamSearchDecoder::expand(vector<Cand> &candvec, const Cand &ca
 		Cand cand_new;
 		cand_new.taglist = cand.taglist;
 		cand_new.taglist.push_back(e_tag);
-		vector<vector<int> > m_local_features;
-		extract_features(m_local_features,cand_new.taglist,cur_pos);
+		vector<vector<int> > m_local_features = extract_features(cand_new.taglist,cur_pos);
 		double local_score = m_pcpt->cal_local_score(m_local_features);
 		cand_new.acc_score = cand.acc_score+local_score;
 		candvec.push_back(cand_new);
 	}
+	return candvec;
 }
 
 bool Perceptron::BeamSearchDecoder::check_is_history_same(const Cand &cand0, const Cand &cand1)
@@ -522,8 +521,9 @@ void Perceptron::BeamSearchDecoder::add_to_new(const vector<Cand> &candvec)
 
 /*
 */
-void Perceptron::BeamSearchDecoder::extract_features(vector<vector<int> > &features, const vector<int> &taglist, size_t feature_extract_pos)
+vector<vector<int> > Perceptron::BeamSearchDecoder::extract_features(const vector<int> &taglist, size_t feature_extract_pos)
 {
+	vector<vector<int> > features;
 	features.clear();
 	int arr[] = {-2,-1,0,1,2};
 	vector<int> feature;
@@ -550,6 +550,8 @@ void Perceptron::BeamSearchDecoder::extract_features(vector<vector<int> > &featu
 	feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+1).at(0));
 	feature.push_back(taglist.at(feature_extract_pos));
 	features.push_back(feature);
+	
+	return features;
 }
 
 /*
