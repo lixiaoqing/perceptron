@@ -1,29 +1,25 @@
 #include "perceptron.h"
 
-Perceptron::Perceptron()
+Perceptron::Perceptron(Data *data,Model *model)
 {
 	ROUND = 20;
 	LINE = 1;
 	m_line = 0;
 	m_round = 0;
-	m_token_matrix_list.clear();
-	train_para_dict.clear();
-	test_para_dict.clear();
-	tagset_for_token.clear();
-	tagset_for_last_tag.clear();
-	load_validtagset();
+	m_data = data;
+	m_model = model;
 }
 
 void Perceptron::train(string &train_file)
 {
-	load_data(train_file);
-	LINE = m_token_matrix_list.size();
+	LINE = m_data->get_size();
+	m_model->set_line(LINE);
 	for (m_round=0;m_round<ROUND;m_round++)
 	{
-		random_shuffle(m_token_matrix_list.begin(),m_token_matrix_list.end());
+		m_data->shuffle();
 		for (m_line=0;m_line<LINE;m_line++)
 		{
-			BeamSearchDecoder m_decoder(MODE,&(m_token_matrix_list.at(m_line)),this);
+			Decoder m_decoder(m_data->get_token_matrix_ptr(m_line),m_model);
 			size_t exit_pos;
 			if(m_decoder.decode_for_train(exit_pos) == false)
 			{
@@ -32,17 +28,12 @@ void Perceptron::train(string &train_file)
 					vector<vector<int> > local_features;
 					vector<vector<int> > local_gold_features;
 					m_decoder.get_features_at_pos(local_features,local_gold_features,i);
-					update_paras(local_features,local_gold_features);
+					m_model->update_paras(local_features,local_gold_features,m_round,m_line);
 				}
 			}
 			if (m_line == LINE - 1)
 			{
-				for (auto &fwp : train_para_dict)
-				{
-					fwp.second.acc_weight += fwp.second.weight*((m_round - fwp.second.lastround)*LINE + m_line - fwp.second.lastline);
-					fwp.second.lastline = m_line;
-					fwp.second.lastround = m_round;
-				}
+				m_model->update_paras_for_lastline(m_round,m_line);
 			}
 			if (m_line%1000 == 0)
 			{
@@ -50,68 +41,14 @@ void Perceptron::train(string &train_file)
 			}
 		}
 		cout<<"round "<<m_round<<endl;
-		save_bin_model();
+		m_model->save_bin_model(m_round,m_round*LINE);
 	}
-	//save_model();
-	//save_bin_model();
-}
-
-void Perceptron::save_model()
-{
-	ofstream fout;
-	fout.open("model");
-	if (!fout.is_open())
-	{
-		cerr<<"fail to open model file to write\n";
-		return;
-	}
-	for (const auto &fwp : train_para_dict)
-	{
-		if (fwp.second.acc_weight > -1e10 && fwp.second.acc_weight< 1e-10)
-			continue;
-		for (const auto &v : fwp.first)
-		{
-			fout<<v<<'\t';
-		}
-		fout<<fwp.second.acc_weight/(ROUND*LINE)<<endl;
-	}
-	cout<<"save model over\n";
-}
-
-void Perceptron::save_bin_model()
-{
-	ofstream fout("model.bin."+to_string(m_round),ios::binary);
-	if (!fout.is_open())
-	{
-		cerr<<"fail to open binary model file to write!\n";
-		return;
-	}
-	size_t feature_num = 0;
-	for (const auto &fwp : train_para_dict)
-	{
-		if (fwp.second.acc_weight > -1e-10 && fwp.second.acc_weight < 1e-10)
-			continue;
-		feature_num++;
-	}
-	fout.write((char*)&feature_num,sizeof(size_t));
-	for (const auto &fwp : train_para_dict)
-	{
-		if (fwp.second.acc_weight > -1e-10 && fwp.second.acc_weight < 1e-10)
-			continue;
-		size_t len = fwp.first.size();
-		fout.write((char*)&len,sizeof(size_t));
-		fout.write((char*)&(fwp.first.at(0)),sizeof(int)*fwp.first.size());
-		double weight = fwp.second.acc_weight/(ROUND*LINE);
-		fout.write((char*)&(weight),sizeof(double));
-	}
-	cout<<"save binary model over\n";
+	//save_model(ROUND*LINE);
 }
 
 void Perceptron::test(string &test_file)
 {
-	load_bin_model();
-	load_data(test_file);
-	LINE = m_token_matrix_list.size();
+	LINE = m_data->get_size();
 	ofstream fout;
 	fout.open("output");
 	if (!fout.is_open())
@@ -122,17 +59,16 @@ void Perceptron::test(string &test_file)
 
 	vector<vector<int> > outputs;
 	outputs.resize(LINE);
-//#pragma omp parallel for
+#pragma omp parallel for
 	for(size_t m_line=0;m_line<LINE;m_line++)
 	{
-		vector<vector<int> > *cur_line_ptr = &(m_token_matrix_list.at(m_line));
-		BeamSearchDecoder m_decoder(MODE,cur_line_ptr,this);
+		Decoder m_decoder(m_data->get_token_matrix_ptr(m_line),m_model);
 		outputs.at(m_line) = m_decoder.decode();
 	}
 
 	for(size_t m_line=0;m_line<LINE;m_line++)
 	{
-		vector<vector<int> > *cur_line_ptr = &(m_token_matrix_list.at(m_line));
+		vector<vector<int> > *cur_line_ptr = m_data->get_token_matrix_ptr(m_line);
 		for (size_t i=2;i<outputs.at(m_line).size();i++)
 		{
 			fout<<cur_line_ptr->at(i).at(0)<<'\t'<<outputs.at(m_line).at(i)<<endl;
@@ -141,7 +77,12 @@ void Perceptron::test(string &test_file)
 	}
 }
 
-void Perceptron::load_validtagset()
+Model::Model()
+{
+	load_validtagset();
+}
+
+void Model::load_validtagset()
 {
 	ifstream fin;
 	fin.open("tagset_for_token");
@@ -186,7 +127,200 @@ void Perceptron::load_validtagset()
 	fin.close();
 }
 
-void Perceptron::load_data(string &data_file)
+void Model::save_model(size_t total_line)
+{
+	ofstream fout;
+	fout.open("model");
+	if (!fout.is_open())
+	{
+		cerr<<"fail to open model file to write\n";
+		return;
+	}
+	for (const auto &fwp : train_para_dict)
+	{
+		if (fwp.second.acc_weight > -1e10 && fwp.second.acc_weight< 1e-10)
+			continue;
+		for (const auto &v : fwp.first)
+		{
+			fout<<v<<'\t';
+		}
+		fout<<fwp.second.acc_weight/total_line<<endl;
+	}
+	cout<<"save model over\n";
+}
+
+void Model::save_bin_model(size_t round,size_t total_line)
+{
+	ofstream fout("model.bin."+to_string(round),ios::binary);
+	if (!fout.is_open())
+	{
+		cerr<<"fail to open binary model file to write!\n";
+		return;
+	}
+	size_t feature_num = 0;
+	for (const auto &fwp : train_para_dict)
+	{
+		if (fwp.second.acc_weight > -1e-10 && fwp.second.acc_weight < 1e-10)
+			continue;
+		feature_num++;
+	}
+	fout.write((char*)&feature_num,sizeof(size_t));
+	for (const auto &fwp : train_para_dict)
+	{
+		if (fwp.second.acc_weight > -1e-10 && fwp.second.acc_weight < 1e-10)
+			continue;
+		size_t len = fwp.first.size();
+		fout.write((char*)&len,sizeof(size_t));
+		fout.write((char*)&(fwp.first.at(0)),sizeof(int)*fwp.first.size());
+		double weight = fwp.second.acc_weight/total_line;
+		fout.write((char*)&(weight),sizeof(double));
+	}
+	cout<<"save binary model over\n";
+}
+
+void Model::load_model()
+{
+	ifstream fin;
+	fin.open("model");
+	if (!fin.is_open())
+	{
+		cerr<<"fail to open model file\n";
+		return;
+	}
+	string line;
+	while(getline(fin,line))
+	{
+		TrimLine(line);
+		vector<string> toks;
+		Split(toks,line);
+		vector<int> feature;
+		for (size_t i=0;i<toks.size()-1;i++)
+		{
+			feature.push_back(stoi(toks.at(i)));
+		}
+		test_para_dict[feature] = stod(toks.at(toks.size()-1));
+	}
+	cout<<"load model over\n";
+}
+
+void Model::load_bin_model()
+{
+	ifstream fin;
+	fin.open("model.bin",ios::binary);
+	if (!fin.is_open())
+	{
+		cerr<<"fail to open binary model file\n";
+		return;
+	}
+	size_t feature_num;
+	fin.read((char*)&feature_num, sizeof(size_t));
+	size_t len;
+	for (size_t i = 0; i < feature_num; i++) 
+	{
+		fin.read((char*)&len, sizeof(size_t));
+		vector<int> feature;
+		feature.resize(len);
+		fin.read((char*)&(feature.at(0)),sizeof(int)*len);
+		double weight;
+		fin.read((char*)&weight, sizeof(double));
+		test_para_dict[feature] = weight;
+	}
+	cout<<"load binary model over\n";
+}
+
+void Model::update_paras(const vector<vector<int> > &local_features, const vector<vector<int> > &local_gold_features, const size_t round, const size_t line)
+{
+	for (const auto &e_feature : local_features)
+	{
+		auto it = train_para_dict.find(e_feature);
+		if (it == train_para_dict.end())
+		{
+			WeightInfo tmp = {-1,-1,line,round};
+			train_para_dict.insert(make_pair(e_feature,tmp));
+		}
+		else
+		{
+			it->second.acc_weight += it->second.weight*((round - it->second.lastround)*LINE + line - it->second.lastline) - 1;
+			it->second.weight += -1;
+			it->second.lastline = line;
+			it->second.lastround = round;
+		}
+	}
+
+	for (const auto &e_feature : local_gold_features)
+	{
+		auto it = train_para_dict.find(e_feature);
+		if (it == train_para_dict.end())
+		{
+			WeightInfo tmp = {1,1,line,round};
+			train_para_dict.insert(make_pair(e_feature,tmp));
+		}
+		else
+		{
+			it->second.acc_weight += it->second.weight*((round-it->second.lastround)*LINE+line-it->second.lastline)+1;
+			it->second.weight += 1;
+			it->second.lastline = line;
+			it->second.lastround = round;
+		}
+	}
+}
+
+void Model::update_paras_for_lastline(const size_t round, const size_t line)
+{
+	for (auto &fwp : train_para_dict)
+	{
+		fwp.second.acc_weight += fwp.second.weight*((round - fwp.second.lastround)*LINE + line - fwp.second.lastline);
+		fwp.second.lastline = line;
+		fwp.second.lastround = round;
+	}
+}
+
+vector<int> Model::get_validtagset(int cur_tok_id, int last_tag)
+{
+	vector<int> validtagset;
+	set<int> validtagset1;
+	auto it = tagset_for_token.find(cur_tok_id);
+	if (it != tagset_for_token.end())
+	{
+		validtagset1 = it->second;
+	}
+	else
+	{
+		validtagset1 = tagset_for_token[-1];
+	}
+
+	set<int> validtagset2;
+	it = tagset_for_last_tag.find(last_tag);
+	if (it != tagset_for_last_tag.end())
+	{
+		validtagset2 = it->second;
+	}
+	else
+	{
+		validtagset2 = tagset_for_last_tag[-1];
+	}
+	set_intersection(validtagset1.begin(),validtagset1.end(),validtagset2.begin(),validtagset2.end(),back_inserter(validtagset));
+	return validtagset;
+}
+
+double Model::cal_local_score(const vector<vector<int> > &local_features)
+{
+	double local_score = 0;
+	for (const auto &e_feature : local_features)
+	{
+		if (MODE == "train")
+		{
+			local_score += train_para_dict[e_feature].weight;
+		}
+		else
+		{
+			local_score += test_para_dict[e_feature];
+		}
+	}
+	return local_score;
+}
+
+void Data::load_data(string &data_file)
 {
 	ifstream fin;
 	fin.open(data_file.c_str());
@@ -203,7 +337,7 @@ void Perceptron::load_data(string &data_file)
 	cout<<"load data over\n";
 }
 
-bool Perceptron::load_block(vector<vector<int> > &token_matrix, ifstream &fin)
+bool Data::load_block(vector<vector<int> > &token_matrix, ifstream &fin)
 {
 	token_matrix.clear();
 	string line;
@@ -241,141 +375,9 @@ bool Perceptron::load_block(vector<vector<int> > &token_matrix, ifstream &fin)
 	return false;
 }
 
-void Perceptron::load_model()
+Decoder::Decoder(vector<vector<int> > *cur_line_ptr,Model *model)
 {
-	ifstream fin;
-	fin.open("model");
-	if (!fin.is_open())
-	{
-		cerr<<"fail to open model file\n";
-		return;
-	}
-	string line;
-	while(getline(fin,line))
-	{
-		TrimLine(line);
-		vector<string> toks;
-		Split(toks,line);
-		vector<int> feature;
-		for (size_t i=0;i<toks.size()-1;i++)
-		{
-			feature.push_back(stoi(toks.at(i)));
-		}
-		test_para_dict[feature] = stod(toks.at(toks.size()-1));
-	}
-	cout<<"load model over\n";
-}
-
-void Perceptron::load_bin_model()
-{
-	ifstream fin;
-	fin.open("model.bin",ios::binary);
-	if (!fin.is_open())
-	{
-		cerr<<"fail to open binary model file\n";
-		return;
-	}
-	size_t feature_num;
-	fin.read((char*)&feature_num, sizeof(size_t));
-	size_t len;
-	for (size_t i = 0; i < feature_num; i++) 
-	{
-		fin.read((char*)&len, sizeof(size_t));
-		vector<int> feature;
-		feature.resize(len);
-		fin.read((char*)&(feature.at(0)),sizeof(int)*len);
-		double weight;
-		fin.read((char*)&weight, sizeof(double));
-		test_para_dict[feature] = weight;
-	}
-	cout<<"load binary model over\n";
-}
-
-void Perceptron::update_paras(const vector<vector<int> > &local_features, const vector<vector<int> > &local_gold_features)
-{
-	for (const auto &e_feature : local_features)
-	{
-		auto it = train_para_dict.find(e_feature);
-		if (it == train_para_dict.end())
-		{
-			WeightInfo tmp = {-1,-1,m_line,m_round};
-			train_para_dict.insert(make_pair(e_feature,tmp));
-		}
-		else
-		{
-			it->second.acc_weight += it->second.weight*((m_round - it->second.lastround)*LINE + m_line - it->second.lastline) - 1;
-			it->second.weight += -1;
-			it->second.lastline = m_line;
-			it->second.lastround = m_round;
-		}
-	}
-
-	for (const auto &e_feature : local_gold_features)
-	{
-		auto it = train_para_dict.find(e_feature);
-		if (it == train_para_dict.end())
-		{
-			WeightInfo tmp = {1,1,m_line,m_round};
-			train_para_dict.insert(make_pair(e_feature,tmp));
-		}
-		else
-		{
-			it->second.acc_weight += it->second.weight*((m_round-it->second.lastround)*LINE+m_line-it->second.lastline)+1;
-			it->second.weight += 1;
-			it->second.lastline = m_line;
-			it->second.lastround = m_round;
-		}
-	}
-}
-
-void Perceptron::get_validtagset(vector<int> &validtagset, int cur_tok_id, int last_tag)
-{
-	validtagset.clear();
-	set<int> validtagset1;
-	auto it = tagset_for_token.find(cur_tok_id);
-	if (it != tagset_for_token.end())
-	{
-		validtagset1 = it->second;
-	}
-	else
-	{
-		validtagset1 = tagset_for_token[-1];
-	}
-
-	set<int> validtagset2;
-	it = tagset_for_last_tag.find(last_tag);
-	if (it != tagset_for_last_tag.end())
-	{
-		validtagset2 = it->second;
-	}
-	else
-	{
-		validtagset2 = tagset_for_last_tag[-1];
-	}
-	set_intersection(validtagset1.begin(),validtagset1.end(),validtagset2.begin(),validtagset2.end(),back_inserter(validtagset));
-}
-
-double Perceptron::cal_local_score(const vector<vector<int> > &local_features)
-{
-	double local_score = 0;
-	for (const auto &e_feature : local_features)
-	{
-		if (MODE == "train")
-		{
-			local_score += train_para_dict[e_feature].weight;
-		}
-		else
-		{
-			local_score += test_para_dict[e_feature];
-		}
-	}
-	return local_score;
-}
-
-Perceptron::BeamSearchDecoder::BeamSearchDecoder(string &mode,vector<vector<int> > *cur_line_ptr,Perceptron *pcpt)
-{
-	m_pcpt = pcpt;
-	MODE = mode;
+	m_model = model;
 	m_token_matrix_ptr = cur_line_ptr;
 	candlist_old.clear();
 	candlist_new.clear();
@@ -384,15 +386,13 @@ Perceptron::BeamSearchDecoder::BeamSearchDecoder(string &mode,vector<vector<int>
 	init_cand.taglist.push_back(0);
 	init_cand.acc_score = 0;
 	candlist_old.push_back(init_cand);
-	if (mode == "train")
-	{
-		m_gold_taglist.clear();
-		m_gold_taglist.push_back(0);
-		m_gold_taglist.push_back(0);
-	}
+
+	m_gold_taglist.clear();
+	m_gold_taglist.push_back(0);
+	m_gold_taglist.push_back(0);
 }
 
-bool Perceptron::BeamSearchDecoder::decode_for_train(size_t &exit_pos)
+bool Decoder::decode_for_train(size_t &exit_pos)
 {
 	//cout<<"current sentence size: "<<m_token_matrix_ptr->size()-2<<endl;
 	for (cur_pos=2;cur_pos<m_token_matrix_ptr->size()-2;cur_pos++)
@@ -433,12 +433,11 @@ bool Perceptron::BeamSearchDecoder::decode_for_train(size_t &exit_pos)
 	return true;
 }
 
-vector<int> Perceptron::BeamSearchDecoder::decode()
+vector<int> Decoder::decode()
 {
 	//cout<<"current sentence size: "<<m_token_matrix_ptr->size()-2<<endl;
 	for (cur_pos=2;cur_pos<m_token_matrix_ptr->size()-2;cur_pos++)
 	{
-		size_t len = m_token_matrix_ptr->at(cur_pos).size();
 		for (const auto &e_cand : candlist_old)
 		{
 			vector<Cand> candvec = expand(e_cand);
@@ -458,14 +457,13 @@ vector<int> Perceptron::BeamSearchDecoder::decode()
 	return candlist_old.at(0).taglist;
 }
 
-vector<Cand> Perceptron::BeamSearchDecoder::expand(const Cand &cand)
+vector<Cand> Decoder::expand(const Cand &cand)
 {
 
 	vector<Cand> candvec;
 	int cur_tok_id = m_token_matrix_ptr->at(cur_pos).at(0);
 	int last_tag = cand.taglist.at(cand.taglist.size()-1);
-	vector<int> validtagset;
-	m_pcpt->get_validtagset(validtagset,cur_tok_id,last_tag);
+	vector<int> validtagset = m_model->get_validtagset(cur_tok_id,last_tag);
 
 	for (const auto &e_tag : validtagset)
 	{
@@ -473,14 +471,14 @@ vector<Cand> Perceptron::BeamSearchDecoder::expand(const Cand &cand)
 		cand_new.taglist = cand.taglist;
 		cand_new.taglist.push_back(e_tag);
 		vector<vector<int> > m_local_features = extract_features(cand_new.taglist,cur_pos);
-		double local_score = m_pcpt->cal_local_score(m_local_features);
+		double local_score = m_model->cal_local_score(m_local_features);
 		cand_new.acc_score = cand.acc_score+local_score;
 		candvec.push_back(cand_new);
 	}
 	return candvec;
 }
 
-bool Perceptron::BeamSearchDecoder::check_is_history_same(const Cand &cand0, const Cand &cand1)
+bool Decoder::check_is_history_same(const Cand &cand0, const Cand &cand1)
 {
 	for (size_t k=0;k<NGRAM;k++)
 	{
@@ -492,7 +490,7 @@ bool Perceptron::BeamSearchDecoder::check_is_history_same(const Cand &cand0, con
 	return true;
 }
 
-void Perceptron::BeamSearchDecoder::add_to_new(const vector<Cand> &candvec)
+void Decoder::add_to_new(const vector<Cand> &candvec)
 {
 	for (const auto &e_cand : candvec)
 	{
@@ -521,7 +519,7 @@ void Perceptron::BeamSearchDecoder::add_to_new(const vector<Cand> &candvec)
 
 /*
 */
-vector<vector<int> > Perceptron::BeamSearchDecoder::extract_features(const vector<int> &taglist, size_t feature_extract_pos)
+vector<vector<int> > Decoder::extract_features(const vector<int> &taglist, size_t feature_extract_pos)
 {
 	vector<vector<int> > features;
 	features.clear();
@@ -555,7 +553,7 @@ vector<vector<int> > Perceptron::BeamSearchDecoder::extract_features(const vecto
 }
 
 /*
-void Perceptron::BeamSearchDecoder::extract_features(vector<vector<int> > &features, const vector<int> &taglist, size_t feature_extract_pos)
+void Decoder::extract_features(vector<vector<int> > &features, const vector<int> &taglist, size_t feature_extract_pos)
 {
 	features.clear();
 	if (taglist.at(feature_extract_pos) == 0)
@@ -655,17 +653,23 @@ int main(int argc, char *argv[])
 	clock_t a,b;
 	a = clock();
 
-	Perceptron my_pcpt;
+	Data my_data;
+	Model my_model;
 	if (argv[1][1] == 't')
 	{
-		my_pcpt.set_mode("train");
 		string train_file(argv[2]);
+		my_data.load_data(train_file);
+		my_model.set_mode("train");
+		Perceptron my_pcpt(&my_data,&my_model);
 		my_pcpt.train(train_file);
 	}
 	else if (argv[1][1] == 'd')
 	{
-		my_pcpt.set_mode("test");
 		string test_file(argv[2]);
+		my_data.load_data(test_file);
+		my_model.load_bin_model();
+		my_model.set_mode("test");
+		Perceptron my_pcpt(&my_data,&my_model);
 		my_pcpt.test(test_file);
 	}
 
