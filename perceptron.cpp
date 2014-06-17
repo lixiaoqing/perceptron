@@ -59,8 +59,20 @@ void Perceptron::test(string &test_file)
 
 	vector<vector<int> > outputs;
 	outputs.resize(LINE);
+	size_t num_threads = 10;
+	size_t num_rounds = LINE/num_threads;
+	for (size_t r=0;r<num_rounds;r++)
+	{
 #pragma omp parallel for
-	for(size_t m_line=0;m_line<LINE;m_line++)
+		for (size_t i=0;i<num_threads;i++)
+		{
+			size_t m_line = r*num_threads + i;
+			Decoder m_decoder(m_data->get_token_matrix_ptr(m_line),m_model);
+			outputs.at(m_line) = m_decoder.decode();
+		}
+	}
+
+	for(size_t m_line=num_threads*num_rounds;m_line<LINE;m_line++)
 	{
 		Decoder m_decoder(m_data->get_token_matrix_ptr(m_line),m_model);
 		outputs.at(m_line) = m_decoder.decode();

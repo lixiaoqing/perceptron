@@ -86,7 +86,6 @@ class Decoder
 		Model *m_model;
 		const static size_t BEAM_SIZE = 16;
 		const static size_t NGRAM = 2;
-		string MODE;
 		vector<vector<int> > *m_token_matrix_ptr;
 		vector<Cand> candlist_old;
 		vector<Cand> candlist_new;
@@ -100,7 +99,6 @@ class Perceptron
 		Perceptron(Data *data,Model *model);
 		void train(string &train_file);
 		void test(string &test_file);
-
 
 	private:
 		size_t ROUND;
