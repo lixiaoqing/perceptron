@@ -2,7 +2,7 @@
 
 Perceptron::Perceptron(Data *data,Model *model)
 {
-	ROUND = 20;
+	ROUND = 5;
 	LINE = 1;
 	m_line = 0;
 	m_round = 0;
@@ -63,7 +63,7 @@ void Perceptron::test(string &test_file)
 	size_t num_rounds = LINE/num_threads;
 	for (size_t r=0;r<num_rounds;r++)
 	{
-#pragma omp parallel for
+//#pragma omp parallel for
 		for (size_t i=0;i<num_threads;i++)
 		{
 			size_t m_line = r*num_threads + i;
@@ -78,12 +78,28 @@ void Perceptron::test(string &test_file)
 		outputs.at(m_line) = m_decoder.decode();
 	}
 
+	ifstream fin;
+	fin.open(test_file.c_str());
+	if (!fin.is_open())
+	{
+		cerr<<"fail to open data file!\n";
+		return;
+	}
+	string line;
 	for(size_t m_line=0;m_line<LINE;m_line++)
 	{
 		vector<vector<int> > *cur_line_ptr = m_data->get_token_matrix_ptr(m_line);
 		for (size_t i=2;i<outputs.at(m_line).size();i++)
 		{
-			fout<<cur_line_ptr->at(i).at(0)<<'\t'<<outputs.at(m_line).at(i)<<endl;
+			while(getline(fin,line))
+			{
+				TrimLine(line);
+				if (line.size()>0)
+				{
+					break;
+				}
+			}
+			fout<<line<<'\t'<<m_data->get_tag(outputs.at(m_line).at(i))<<endl;
 		}
 		fout<<endl;
 	}
@@ -332,6 +348,97 @@ double Model::cal_local_score(const vector<vector<int> > &local_features)
 	return local_score;
 }
 
+void Data::save_dict()
+{
+	ofstream fout;
+	fout.open("dict");
+	if (!fout.is_open())
+	{
+		cerr<<"fail to open dict file to write\n";
+		return;
+	}
+	for (const auto &d : dict)
+	{
+		fout<<"###dict###"<<endl;
+		for (const auto &kvp : d)
+		{
+			fout<<kvp.first<<'\t'<<kvp.second<<endl;
+		}
+	}
+	fout.close();
+
+	fout.open("tagset_for_token");
+	if (!fout.is_open())
+	{
+		cerr<<"fail to open tagset_for_token file to write\n";
+		return;
+	}
+	fout<<"-1";
+	for (const auto &e : tagset)
+	{
+		fout<<' '<<e;
+	}
+	fout<<endl;
+	for (const auto &kvp : token2tagset)
+	{
+		fout<<kvp.first;
+		for (const auto &e : kvp.second)
+		{
+			fout<<' '<<e;
+		}
+		fout<<endl;
+	}
+	fout.close();
+
+	fout.open("tagset_for_last_tag");
+	if (!fout.is_open())
+	{
+		cerr<<"fail to open tagset_for_last_tag file to write\n";
+		return;
+	}
+	fout<<"-1";
+	for (const auto &e : tagset)
+	{
+		fout<<' '<<e;
+	}
+	fout<<endl;
+	fout.close();
+}
+
+void Data::load_dict()
+{
+	dict.resize(m_field_size+1);
+	ifstream fin;
+	fin.open("dict");
+	if (!fin.is_open())
+	{
+		cerr<<"fail to open dict file to load\n";
+		return;
+	}
+
+	int dict_id = -1;
+	string line;
+	while(getline(fin,line))
+	{
+		TrimLine(line);
+		if (line == "###dict###")
+		{
+			dict_id += 1;
+		}
+		else
+		{
+			vector<string> kv;
+			Split(kv,line);
+			dict.at(dict_id).insert(make_pair(kv.at(0),stoi(kv.at(1))));
+		}
+	}
+	fin.close();
+	for(const auto &kv : dict.at(dict.size()-1))
+	{
+		id2tag.insert(make_pair(kv.second,kv.first));
+	}
+}
+
 void Data::load_data(string &data_file)
 {
 	ifstream fin;
@@ -341,41 +448,108 @@ void Data::load_data(string &data_file)
 		cerr<<"fail to open data file!\n";
 		return;
 	}
+	string line;
+	getline(fin,line);
+	vector<string> fields;
+	Split(fields,line);
+	m_field_size = fields.size();
+	fin.seekg(0,fin.beg);
+
 	vector<vector<int> > token_matrix;
-	while(load_block(token_matrix,fin))
+	if (MODE == "train")
 	{
-		m_token_matrix_list.push_back(token_matrix);
+		ids.resize(m_field_size,1);
+		dict.resize(m_field_size);
+		while(load_train_block(token_matrix,fin))
+		{
+			m_token_matrix_list.push_back(token_matrix);
+		}
+		save_dict();
+	}
+	else
+	{
+		load_dict();
+		while(load_test_block(token_matrix,fin))
+		{
+			m_token_matrix_list.push_back(token_matrix);
+		}
 	}
 	cout<<"load data over\n";
 }
 
-bool Data::load_block(vector<vector<int> > &token_matrix, ifstream &fin)
+bool Data::load_test_block(vector<vector<int> > &token_matrix, ifstream &fin)
 {
 	token_matrix.clear();
 	string line;
-	vector<int> default_token_vec;
+	vector<int> default_token_vec(m_field_size,0);
 	token_matrix.push_back(default_token_vec);
 	token_matrix.push_back(default_token_vec);
-	size_t field_size;
 	while(getline(fin,line))
 	{
 		TrimLine(line);
 		if (line.size() == 0)
 		{
-			token_matrix.at(0).resize(field_size,0);
-			token_matrix.at(1).resize(field_size,0);
-			token_matrix.push_back(token_matrix.at(0));
-			token_matrix.push_back(token_matrix.at(0));
+			token_matrix.push_back(default_token_vec);
+			token_matrix.push_back(default_token_vec);
 			return true;
 		}
 		vector<string> fields;
 		Split(fields,line);
-		field_size = fields.size();
 		vector<int> token_vec;
-		for (size_t i=0;i<field_size;i++)
+		for (size_t i=0;i<m_field_size;i++)
 		{
-			token_vec.push_back(stoi(fields.at(i)));
+			string &field = fields.at(i);
+			auto it=dict.at(i).find(field);
+			if (it != dict.at(i).end())
+			{
+				token_vec.push_back(it->second);
+			}
+			else
+			{
+				token_vec.push_back(-1);
+			}
 		}
+		token_matrix.push_back(token_vec);
+	}
+	return false;
+}
+
+bool Data::load_train_block(vector<vector<int> > &token_matrix, ifstream &fin)
+{
+	token_matrix.clear();
+	string line;
+	vector<int> default_token_vec(m_field_size,0);
+	token_matrix.push_back(default_token_vec);
+	token_matrix.push_back(default_token_vec);
+	while(getline(fin,line))
+	{
+		TrimLine(line);
+		if (line.size() == 0)
+		{
+			token_matrix.push_back(default_token_vec);
+			token_matrix.push_back(default_token_vec);
+			return true;
+		}
+		vector<string> fields;
+		Split(fields,line);
+		vector<int> token_vec;
+		for (size_t i=0;i<m_field_size;i++)
+		{
+			string &field = fields.at(i);
+			auto it=dict.at(i).find(field);
+			if (it != dict.at(i).end())
+			{
+				token_vec.push_back(it->second);
+			}
+			else
+			{
+				dict.at(i).insert(make_pair(field,ids.at(i)));
+				token_vec.push_back(ids.at(i));
+				ids.at(i) += 1;
+			}
+		}
+		token2tagset[token_vec.at(0)].insert(token_vec.at(m_field_size-1));
+		tagset.insert(token_vec.at(m_field_size-1));
 		/*
 		for (auto &e_field : fields)
 		{
@@ -665,20 +839,24 @@ int main(int argc, char *argv[])
 	clock_t a,b;
 	a = clock();
 
-	Data my_data;
-	Model my_model;
 	if (argv[1][1] == 't')
 	{
 		string train_file(argv[2]);
+		Data my_data;
+		my_data.set_mode("train");
 		my_data.load_data(train_file);
+		Model my_model;
 		my_model.set_mode("train");
 		Perceptron my_pcpt(&my_data,&my_model);
 		my_pcpt.train(train_file);
 	}
 	else if (argv[1][1] == 'd')
 	{
+		Data my_data;
 		string test_file(argv[2]);
+		my_data.set_mode("test");
 		my_data.load_data(test_file);
+		Model my_model;
 		my_model.load_bin_model();
 		my_model.set_mode("test");
 		Perceptron my_pcpt(&my_data,&my_model);
