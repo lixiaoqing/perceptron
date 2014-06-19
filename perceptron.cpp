@@ -19,10 +19,16 @@ void Perceptron::train(string &train_file)
 		m_data->shuffle();
 		for (m_line=0;m_line<LINE;m_line++)
 		{
-			Decoder m_decoder(m_data->get_token_matrix_ptr(m_line),m_model);
-			size_t exit_pos;
-			if(m_decoder.decode_for_train(exit_pos) == false)
+			vector<vector<int> > *cur_line_ptr = m_data->get_token_matrix_ptr(m_line);
+			Decoder m_decoder(cur_line_ptr,m_model);
+			m_model->set_cur_line_ptr(cur_line_ptr);
+			vector<int> taglist_output;
+			vector<int> taglist_gold;
+			if(m_decoder.decode_for_train(taglist_output,taglist_gold) == false)
 			{
+				//cout<<"call fun decode_for_train over\n";
+				m_model->update_paras(taglist_output,taglist_gold,m_round,m_line);
+				/*
 				for (size_t i=2;i<=exit_pos;i++)
 				{
 					vector<vector<int> > local_features;
@@ -30,6 +36,7 @@ void Perceptron::train(string &train_file)
 					m_decoder.get_features_at_pos(local_features,local_gold_features,i);
 					m_model->update_paras(local_features,local_gold_features,m_round,m_line);
 				}
+				*/
 			}
 			if (m_line == LINE - 1)
 			{
@@ -67,39 +74,27 @@ void Perceptron::test(string &test_file)
 		for (size_t i=0;i<num_threads;i++)
 		{
 			size_t m_line = r*num_threads + i;
-			Decoder m_decoder(m_data->get_token_matrix_ptr(m_line),m_model);
+			vector<vector<int> > *cur_line_ptr = m_data->get_token_matrix_ptr(m_line);
+			Decoder m_decoder(cur_line_ptr,m_model);
+			m_model->set_cur_line_ptr(cur_line_ptr);
 			outputs.at(m_line) = m_decoder.decode();
 		}
 	}
 
 	for(size_t m_line=num_threads*num_rounds;m_line<LINE;m_line++)
 	{
-		Decoder m_decoder(m_data->get_token_matrix_ptr(m_line),m_model);
+		vector<vector<int> > *cur_line_ptr = m_data->get_token_matrix_ptr(m_line);
+		Decoder m_decoder(cur_line_ptr,m_model);
+		m_model->set_cur_line_ptr(cur_line_ptr);
 		outputs.at(m_line) = m_decoder.decode();
 	}
 
-	ifstream fin;
-	fin.open(test_file.c_str());
-	if (!fin.is_open())
-	{
-		cerr<<"fail to open data file!\n";
-		return;
-	}
-	string line;
 	for(size_t m_line=0;m_line<LINE;m_line++)
 	{
 		vector<vector<int> > *cur_line_ptr = m_data->get_token_matrix_ptr(m_line);
 		for (size_t i=2;i<outputs.at(m_line).size();i++)
 		{
-			while(getline(fin,line))
-			{
-				TrimLine(line);
-				if (line.size()>0)
-				{
-					break;
-				}
-			}
-			fout<<line<<'\t'<<m_data->get_tag(outputs.at(m_line).at(i))<<endl;
+			fout<<m_data->m_data_matrix.at(m_line).at(i)<<'\t'<<m_data->get_tag(outputs.at(m_line).at(i))<<endl;
 		}
 		fout<<endl;
 	}
@@ -108,6 +103,8 @@ void Perceptron::test(string &test_file)
 Model::Model()
 {
 	load_validtagset();
+	NGRAM = 2;
+	m_token_matrix_ptr = NULL;
 }
 
 void Model::load_validtagset()
@@ -256,7 +253,32 @@ void Model::load_bin_model()
 	cout<<"load binary model over\n";
 }
 
-void Model::update_paras(const vector<vector<int> > &local_features, const vector<vector<int> > &local_gold_features, const size_t round, const size_t line)
+void Model::update_paras(const vector<int> &taglist_output, const vector<int> &taglist_gold, const size_t round, const size_t line)
+{
+	//cout<<"call fun update_paras\n";
+	size_t end_pos = taglist_output.size();
+	for (size_t i=2;i<end_pos;i++)
+	{
+		bool is_history_same = true;
+		for (size_t k=0;k<NGRAM;k++)
+		{
+			if (taglist_output.at(i-k) != taglist_gold.at(i-k))
+			{
+				is_history_same = false;
+				break;
+			}
+		}
+		if (is_history_same == true)
+		{
+			continue;
+		}
+		vector<vector<int> > local_features = extract_features(taglist_output,i);
+		vector<vector<int> > local_gold_features = extract_features(taglist_gold,i);
+		update_paras_for_local_features(local_features,local_gold_features,round,line);
+	}
+}
+
+void Model::update_paras_for_local_features(const vector<vector<int> > &local_features, const vector<vector<int> > &local_gold_features, const size_t round, const size_t line)
 {
 	for (const auto &e_feature : local_features)
 	{
@@ -305,6 +327,7 @@ void Model::update_paras_for_lastline(const size_t round, const size_t line)
 
 vector<int> Model::get_validtagset(int cur_tok_id, int last_tag)
 {
+	//cout<<"call fun get_validtagset\n";
 	vector<int> validtagset;
 	set<int> validtagset1;
 	auto it = tagset_for_token.find(cur_tok_id);
@@ -331,8 +354,10 @@ vector<int> Model::get_validtagset(int cur_tok_id, int last_tag)
 	return validtagset;
 }
 
-double Model::cal_local_score(const vector<vector<int> > &local_features)
+double Model::cal_local_score(const Cand &cand, size_t pos)
 {
+	//cout<<"call fun cal_local_score\n";
+	vector<vector<int> > local_features = extract_features(cand.taglist,pos);
 	double local_score = 0;
 	for (const auto &e_feature : local_features)
 	{
@@ -346,6 +371,41 @@ double Model::cal_local_score(const vector<vector<int> > &local_features)
 		}
 	}
 	return local_score;
+}
+
+vector<vector<int> > Model::extract_features(const vector<int> &taglist, size_t feature_extract_pos)
+{
+	//cout<<"call fun extract_features\n";
+	vector<vector<int> > features;
+	features.clear();
+	int arr[] = {-2,-1,0,1,2};
+	vector<int> feature;
+	for (size_t i=0;i<5;i++)
+	{
+		feature.clear();
+		feature.push_back(i);
+		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+arr[i]).at(0));
+		feature.push_back(taglist.at(feature_extract_pos));
+		features.push_back(feature);
+	}
+	for (size_t i=0;i<4;i++)
+	{
+		feature.clear();
+		feature.push_back(i+5);
+		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+arr[i]).at(0));
+		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+arr[i+1]).at(0));
+		feature.push_back(taglist.at(feature_extract_pos));
+		features.push_back(feature);
+	}
+	feature.clear();
+	feature.push_back(9);
+	feature.push_back(m_token_matrix_ptr->at(feature_extract_pos-1).at(0));
+	feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+1).at(0));
+	feature.push_back(taglist.at(feature_extract_pos));
+	features.push_back(feature);
+	
+	//cout<<"call fun extract_features over\n";
+	return features;
 }
 
 void Data::save_dict()
@@ -455,31 +515,25 @@ void Data::load_data(string &data_file)
 	m_field_size = fields.size();
 	fin.seekg(0,fin.beg);
 
-	vector<vector<int> > token_matrix;
 	if (MODE == "train")
 	{
 		ids.resize(m_field_size,1);
 		dict.resize(m_field_size);
-		while(load_train_block(token_matrix,fin))
-		{
-			m_token_matrix_list.push_back(token_matrix);
-		}
+		while(load_train_block(fin));
 		save_dict();
 	}
 	else
 	{
 		load_dict();
-		while(load_test_block(token_matrix,fin))
-		{
-			m_token_matrix_list.push_back(token_matrix);
-		}
+		while(load_test_block(fin));
 	}
 	cout<<"load data over\n";
 }
 
-bool Data::load_test_block(vector<vector<int> > &token_matrix, ifstream &fin)
+bool Data::load_test_block(ifstream &fin)
 {
-	token_matrix.clear();
+	vector<vector<int> > token_matrix;
+	vector<string> line_list(2,"<s>");
 	string line;
 	vector<int> default_token_vec(m_field_size,0);
 	token_matrix.push_back(default_token_vec);
@@ -491,6 +545,8 @@ bool Data::load_test_block(vector<vector<int> > &token_matrix, ifstream &fin)
 		{
 			token_matrix.push_back(default_token_vec);
 			token_matrix.push_back(default_token_vec);
+			m_token_matrix_list.push_back(token_matrix);
+			m_data_matrix.push_back(line_list);
 			return true;
 		}
 		vector<string> fields;
@@ -510,13 +566,14 @@ bool Data::load_test_block(vector<vector<int> > &token_matrix, ifstream &fin)
 			}
 		}
 		token_matrix.push_back(token_vec);
+		line_list.push_back(line);
 	}
 	return false;
 }
 
-bool Data::load_train_block(vector<vector<int> > &token_matrix, ifstream &fin)
+bool Data::load_train_block(ifstream &fin)
 {
-	token_matrix.clear();
+	vector<vector<int> > token_matrix;
 	string line;
 	vector<int> default_token_vec(m_field_size,0);
 	token_matrix.push_back(default_token_vec);
@@ -528,6 +585,7 @@ bool Data::load_train_block(vector<vector<int> > &token_matrix, ifstream &fin)
 		{
 			token_matrix.push_back(default_token_vec);
 			token_matrix.push_back(default_token_vec);
+			m_token_matrix_list.push_back(token_matrix);
 			return true;
 		}
 		vector<string> fields;
@@ -578,9 +636,9 @@ Decoder::Decoder(vector<vector<int> > *cur_line_ptr,Model *model)
 	m_gold_taglist.push_back(0);
 }
 
-bool Decoder::decode_for_train(size_t &exit_pos)
+bool Decoder::decode_for_train(vector<int> &taglist_output, vector<int> &taglist_gold)
 {
-	//cout<<"current sentence size: "<<m_token_matrix_ptr->size()-2<<endl;
+	//cout<<"call fun decode_for_train\n";
 	for (cur_pos=2;cur_pos<m_token_matrix_ptr->size()-2;cur_pos++)
 	{
 		size_t len = m_token_matrix_ptr->at(cur_pos).size();
@@ -611,7 +669,9 @@ bool Decoder::decode_for_train(size_t &exit_pos)
 		}
 		if (lose_track == true)
 		{
-			exit_pos = cur_pos;
+			taglist_output = candlist_old.at(0).taglist;
+			taglist_gold = m_gold_taglist;
+			//cout<<"call fun decode_for_train over\n";
 			return false;
 		}
 		//cout<<"decoding at pos "<<cur_pos-2<<endl;
@@ -645,7 +705,7 @@ vector<int> Decoder::decode()
 
 vector<Cand> Decoder::expand(const Cand &cand)
 {
-
+	//cout<<"call fun expand\n";
 	vector<Cand> candvec;
 	int cur_tok_id = m_token_matrix_ptr->at(cur_pos).at(0);
 	int last_tag = cand.taglist.at(cand.taglist.size()-1);
@@ -656,8 +716,7 @@ vector<Cand> Decoder::expand(const Cand &cand)
 		Cand cand_new;
 		cand_new.taglist = cand.taglist;
 		cand_new.taglist.push_back(e_tag);
-		vector<vector<int> > m_local_features = extract_features(cand_new.taglist,cur_pos);
-		double local_score = m_model->cal_local_score(m_local_features);
+		double local_score = m_model->cal_local_score(cand_new,cur_pos);
 		cand_new.acc_score = cand.acc_score+local_score;
 		candvec.push_back(cand_new);
 	}
@@ -705,39 +764,6 @@ void Decoder::add_to_new(const vector<Cand> &candvec)
 
 /*
 */
-vector<vector<int> > Decoder::extract_features(const vector<int> &taglist, size_t feature_extract_pos)
-{
-	vector<vector<int> > features;
-	features.clear();
-	int arr[] = {-2,-1,0,1,2};
-	vector<int> feature;
-	for (size_t i=0;i<5;i++)
-	{
-		feature.clear();
-		feature.push_back(i);
-		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+arr[i]).at(0));
-		feature.push_back(taglist.at(feature_extract_pos));
-		features.push_back(feature);
-	}
-	for (size_t i=0;i<4;i++)
-	{
-		feature.clear();
-		feature.push_back(i+5);
-		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+arr[i]).at(0));
-		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+arr[i+1]).at(0));
-		feature.push_back(taglist.at(feature_extract_pos));
-		features.push_back(feature);
-	}
-	feature.clear();
-	feature.push_back(9);
-	feature.push_back(m_token_matrix_ptr->at(feature_extract_pos-1).at(0));
-	feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+1).at(0));
-	feature.push_back(taglist.at(feature_extract_pos));
-	features.push_back(feature);
-	
-	return features;
-}
-
 /*
 void Decoder::extract_features(vector<vector<int> > &features, const vector<int> &taglist, size_t feature_extract_pos)
 {
