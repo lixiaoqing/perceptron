@@ -2,9 +2,11 @@
 
 Model::Model()
 {
-	load_validtagset();
 	NGRAM = 2;
 	m_token_matrix_ptr = NULL;
+	bigram_feature_flag = false;
+	load_validtagset();
+	parse_template();
 }
 
 void Model::load_validtagset()
@@ -48,6 +50,46 @@ void Model::load_validtagset()
 			validtagset.insert(stoi(toks.at(i)));
 		}
 		tagset_for_last_tag[stoi(toks.at(0))] = validtagset;
+	}
+	fin.close();
+}
+
+void Model::parse_template()
+{
+	ifstream fin;
+	fin.open("template");
+	if (!fin.is_open())
+	{
+		cerr<<"fail to open template file\n";
+		return;
+	}
+	string sep("%");
+	string line;
+	while(getline(fin,line))
+	{
+		TrimLine(line);
+		if (line.size() == 0)
+			continue;
+		if (line[0] == '#')
+			continue;
+		if (line == "B")
+		{
+			bigram_feature_flag = true;
+			continue;
+		}
+		vector<pair<int,int> > feature_template;
+		vector<string> toks;
+		Split(toks,line,sep);
+		for (size_t i=1;i<toks.size();i++)
+		{
+			string &tok = toks.at(i);
+			tok = tok.substr(2,tok.size()-3);
+			size_t p = tok.find(',');
+			int row = stoi(tok.substr(0,p));
+			int col = stoi(tok.substr(p+1));
+			feature_template.push_back(make_pair(row,col));
+		}
+		feature_templates.push_back(feature_template);
 	}
 	fin.close();
 }
@@ -274,6 +316,36 @@ vector<vector<int> > Model::extract_features(const vector<int> &taglist, size_t 
 {
 	vector<vector<int> > features;
 	features.clear();
+	vector<int> feature;
+	int id = -1;
+	for (const auto &ft : feature_templates)
+	{
+		id ++;
+		feature.clear();
+		feature.push_back(id);
+		for(const auto &rcp : ft)
+		{
+			feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+rcp.first).at(rcp.second));
+		}
+		feature.push_back(taglist.at(feature_extract_pos));
+		features.push_back(feature);
+	}
+	if (bigram_feature_flag == true)
+	{
+		feature.clear();
+		feature.push_back(++id);
+		feature.push_back(taglist.at(feature_extract_pos-1));
+		feature.push_back(taglist.at(feature_extract_pos));
+		features.push_back(feature);
+	}
+	return features;
+}
+
+/*
+vector<vector<int> > Model::extract_features(const vector<int> &taglist, size_t feature_extract_pos)
+{
+	vector<vector<int> > features;
+	features.clear();
 	int arr[] = {-2,-1,0,1,2};
 	vector<int> feature;
 	for (size_t i=0;i<5;i++)
@@ -302,6 +374,7 @@ vector<vector<int> > Model::extract_features(const vector<int> &taglist, size_t 
 	
 	return features;
 }
+*/
 
 /*
 vector<vector<int> > Model::extract_features(vector<vector<int> > &features, const vector<int> &taglist, size_t feature_extract_pos)

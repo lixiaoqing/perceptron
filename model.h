@@ -6,6 +6,7 @@ class Model
 	public:
 		Model();
 		void load_validtagset();
+		void parse_template();
 		void load_model();
 		void load_bin_model();
 		void save_model(size_t total_line);
@@ -31,5 +32,7 @@ class Model
 		unordered_map<vector<int>, double, vechash> test_para_dict;
 		unordered_map<int, set<int> > tagset_for_token;
 		unordered_map<int, set<int> > tagset_for_last_tag;
+		vector<vector<pair<int,int> > > feature_templates;
+		bool bigram_feature_flag;
 };
 
