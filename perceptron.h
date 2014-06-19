@@ -35,7 +35,7 @@ class Model
 	public:
 		Model();
 		vector<int> get_validtagset(int cur_tok_id, int last_tag);
-		double cal_local_score(const Cand &cand,size_t pos);
+		double cal_local_score(const Cand &cand);
 		void load_validtagset();
 		void save_model(size_t total_line);
 		void save_bin_model(size_t round, size_t total_line);
@@ -84,6 +84,7 @@ class Data
 		vector<unordered_map<string,int> > dict;
 		vector<int> ids;
 		unordered_map<int,set<int> > token2tagset;
+		unordered_map<int,set<int> > lasttag2tagset;
 		set<int> tagset;
 		unordered_map<int,string> id2tag;
 };

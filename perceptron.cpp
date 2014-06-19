@@ -2,7 +2,7 @@
 
 Perceptron::Perceptron(Data *data,Model *model)
 {
-	ROUND = 5;
+	ROUND = 20;
 	LINE = 1;
 	m_line = 0;
 	m_round = 0;
@@ -13,6 +13,7 @@ Perceptron::Perceptron(Data *data,Model *model)
 void Perceptron::train(string &train_file)
 {
 	LINE = m_data->get_size();
+	size_t sect_size = LINE/20;
 	m_model->set_line(LINE);
 	for (m_round=0;m_round<ROUND;m_round++)
 	{
@@ -26,28 +27,19 @@ void Perceptron::train(string &train_file)
 			vector<int> taglist_gold;
 			if(m_decoder.decode_for_train(taglist_output,taglist_gold) == false)
 			{
-				//cout<<"call fun decode_for_train over\n";
 				m_model->update_paras(taglist_output,taglist_gold,m_round,m_line);
-				/*
-				for (size_t i=2;i<=exit_pos;i++)
-				{
-					vector<vector<int> > local_features;
-					vector<vector<int> > local_gold_features;
-					m_decoder.get_features_at_pos(local_features,local_gold_features,i);
-					m_model->update_paras(local_features,local_gold_features,m_round,m_line);
-				}
-				*/
 			}
 			if (m_line == LINE - 1)
 			{
 				m_model->update_paras_for_lastline(m_round,m_line);
 			}
-			if (m_line%1000 == 0)
+			if (m_line%sect_size == 0)
 			{
-				cout<<m_line<<" lines processed\n";
+				cout<<'.';
+				cout.flush();
 			}
 		}
-		cout<<"round "<<m_round<<endl;
+		cout<<"\t iter"<<m_round<<endl;
 		m_model->save_bin_model(m_round,m_round*LINE);
 	}
 	//save_model(ROUND*LINE);
@@ -200,7 +192,7 @@ void Model::save_bin_model(size_t round,size_t total_line)
 		double weight = fwp.second.acc_weight/total_line;
 		fout.write((char*)&(weight),sizeof(double));
 	}
-	cout<<"save binary model over\n";
+	//cout<<"save binary model over\n";
 }
 
 void Model::load_model()
@@ -255,7 +247,6 @@ void Model::load_bin_model()
 
 void Model::update_paras(const vector<int> &taglist_output, const vector<int> &taglist_gold, const size_t round, const size_t line)
 {
-	//cout<<"call fun update_paras\n";
 	size_t end_pos = taglist_output.size();
 	for (size_t i=2;i<end_pos;i++)
 	{
@@ -327,7 +318,6 @@ void Model::update_paras_for_lastline(const size_t round, const size_t line)
 
 vector<int> Model::get_validtagset(int cur_tok_id, int last_tag)
 {
-	//cout<<"call fun get_validtagset\n";
 	vector<int> validtagset;
 	set<int> validtagset1;
 	auto it = tagset_for_token.find(cur_tok_id);
@@ -354,10 +344,9 @@ vector<int> Model::get_validtagset(int cur_tok_id, int last_tag)
 	return validtagset;
 }
 
-double Model::cal_local_score(const Cand &cand, size_t pos)
+double Model::cal_local_score(const Cand &cand)
 {
-	//cout<<"call fun cal_local_score\n";
-	vector<vector<int> > local_features = extract_features(cand.taglist,pos);
+	vector<vector<int> > local_features = extract_features(cand.taglist,cand.taglist.size()-1);
 	double local_score = 0;
 	for (const auto &e_feature : local_features)
 	{
@@ -375,7 +364,6 @@ double Model::cal_local_score(const Cand &cand, size_t pos)
 
 vector<vector<int> > Model::extract_features(const vector<int> &taglist, size_t feature_extract_pos)
 {
-	//cout<<"call fun extract_features\n";
 	vector<vector<int> > features;
 	features.clear();
 	int arr[] = {-2,-1,0,1,2};
@@ -404,7 +392,6 @@ vector<vector<int> > Model::extract_features(const vector<int> &taglist, size_t 
 	feature.push_back(taglist.at(feature_extract_pos));
 	features.push_back(feature);
 	
-	//cout<<"call fun extract_features over\n";
 	return features;
 }
 
@@ -438,6 +425,7 @@ void Data::save_dict()
 	{
 		fout<<' '<<e;
 	}
+	/*
 	fout<<endl;
 	for (const auto &kvp : token2tagset)
 	{
@@ -448,6 +436,7 @@ void Data::save_dict()
 		}
 		fout<<endl;
 	}
+	*/
 	fout.close();
 
 	fout.open("tagset_for_last_tag");
@@ -462,6 +451,15 @@ void Data::save_dict()
 		fout<<' '<<e;
 	}
 	fout<<endl;
+	for (const auto &kvp : lasttag2tagset)
+	{
+		fout<<kvp.first;
+		for (const auto &e : kvp.second)
+		{
+			fout<<' '<<e;
+		}
+		fout<<endl;
+	}
 	fout.close();
 }
 
@@ -578,6 +576,7 @@ bool Data::load_train_block(ifstream &fin)
 	vector<int> default_token_vec(m_field_size,0);
 	token_matrix.push_back(default_token_vec);
 	token_matrix.push_back(default_token_vec);
+	size_t lasttag_id = 0;
 	while(getline(fin,line))
 	{
 		TrimLine(line);
@@ -607,7 +606,9 @@ bool Data::load_train_block(ifstream &fin)
 			}
 		}
 		token2tagset[token_vec.at(0)].insert(token_vec.at(m_field_size-1));
+		lasttag2tagset[lasttag_id].insert(token_vec.at(m_field_size-1));
 		tagset.insert(token_vec.at(m_field_size-1));
+		lasttag_id = token_vec.at(m_field_size-1);
 		/*
 		for (auto &e_field : fields)
 		{
@@ -638,7 +639,6 @@ Decoder::Decoder(vector<vector<int> > *cur_line_ptr,Model *model)
 
 bool Decoder::decode_for_train(vector<int> &taglist_output, vector<int> &taglist_gold)
 {
-	//cout<<"call fun decode_for_train\n";
 	for (cur_pos=2;cur_pos<m_token_matrix_ptr->size()-2;cur_pos++)
 	{
 		size_t len = m_token_matrix_ptr->at(cur_pos).size();
@@ -671,7 +671,6 @@ bool Decoder::decode_for_train(vector<int> &taglist_output, vector<int> &taglist
 		{
 			taglist_output = candlist_old.at(0).taglist;
 			taglist_gold = m_gold_taglist;
-			//cout<<"call fun decode_for_train over\n";
 			return false;
 		}
 		//cout<<"decoding at pos "<<cur_pos-2<<endl;
@@ -705,7 +704,6 @@ vector<int> Decoder::decode()
 
 vector<Cand> Decoder::expand(const Cand &cand)
 {
-	//cout<<"call fun expand\n";
 	vector<Cand> candvec;
 	int cur_tok_id = m_token_matrix_ptr->at(cur_pos).at(0);
 	int last_tag = cand.taglist.at(cand.taglist.size()-1);
@@ -716,7 +714,7 @@ vector<Cand> Decoder::expand(const Cand &cand)
 		Cand cand_new;
 		cand_new.taglist = cand.taglist;
 		cand_new.taglist.push_back(e_tag);
-		double local_score = m_model->cal_local_score(cand_new,cur_pos);
+		double local_score = m_model->cal_local_score(cand_new);
 		cand_new.acc_score = cand.acc_score+local_score;
 		candvec.push_back(cand_new);
 	}
