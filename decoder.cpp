@@ -56,7 +56,11 @@ bool Decoder::decode_for_train(vector<int> &taglist_output, vector<int> &taglist
 		}
 		//cout<<"decoding at pos "<<cur_pos-2<<endl;
 	}
-	return true;
+	if (candlist_old.at(0).taglist == m_gold_taglist)
+		return true;
+	taglist_output = candlist_old.at(0).taglist;
+	taglist_gold = m_gold_taglist;
+	return false;
 }
 
 vector<int> Decoder::decode()

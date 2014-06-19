@@ -96,7 +96,7 @@ void Data::load_dict()
 		}
 	}
 	fin.close();
-	for(const auto &kv : dict.at(dict.size()-1))
+	for(const auto &kv : dict.at(dict_id))
 	{
 		id2tag.insert(make_pair(kv.second,kv.first));
 	}
