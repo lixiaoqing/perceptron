@@ -34,21 +34,22 @@ class Model
 {
 	public:
 		Model();
-		vector<int> get_validtagset(int cur_tok_id, int last_tag);
-		double cal_local_score(const Cand &cand);
 		void load_validtagset();
-		void save_model(size_t total_line);
-		void save_bin_model(size_t round, size_t total_line);
 		void load_model();
 		void load_bin_model();
+		void save_model(size_t total_line);
+		void save_bin_model(size_t round, size_t total_line);
 
+		vector<int> get_validtagset(int cur_tok_id, int last_tag);
+		double cal_local_score(const Cand &cand);
 		void update_paras(const vector<int> &taglist_output, const vector<int> &taglist_gold, const size_t round, const size_t line);
-		void update_paras_for_local_features(const vector<vector<int> > &local_features, const vector<vector<int> > &local_gold_features, const size_t round, const size_t line);
 		void update_paras_for_lastline(const size_t round, const size_t line);
 		void set_line(size_t line){LINE = line;};
 		void set_mode(const string &mode){MODE=mode;};
-		vector<vector<int> > extract_features(const vector<int> &taglist,size_t feature_extract_pos);
 		void set_cur_line_ptr(vector<vector<int> > *cur_line_ptr) {m_token_matrix_ptr=cur_line_ptr;};
+	private:
+		void update_paras_for_local_features(const vector<vector<int> > &local_features, const vector<vector<int> > &local_gold_features, const size_t round, const size_t line);
+		vector<vector<int> > extract_features(const vector<int> &taglist,size_t feature_extract_pos);
 
 	private:
 		size_t LINE;
@@ -81,8 +82,8 @@ class Data
 	private:
 		string MODE;
 		size_t m_field_size;
-		vector<unordered_map<string,int> > dict;
 		vector<int> ids;
+		vector<unordered_map<string,int> > dict;
 		unordered_map<int,set<int> > token2tagset;
 		unordered_map<int,set<int> > lasttag2tagset;
 		set<int> tagset;
@@ -96,9 +97,7 @@ class Decoder
 		bool decode_for_train(vector<int> &taglist_output, vector<int> &taglist_gold);
 		vector<int> decode();
 
-		void get_features_at_pos(vector<vector<int> > &local_features,vector<vector<int> > &local_gold_features,size_t pos) {local_features = extract_features(candlist_old.at(0).taglist,pos);local_gold_features = extract_features(m_gold_taglist,pos);};
 	private:
-		vector<vector<int> > extract_features(const vector<int> &taglist,size_t feature_extract_pos);
 		vector<Cand> expand(const Cand &cand);
 		void add_to_new(const vector<Cand> &candlist);
 		bool check_is_history_same(const Cand &cand0, const Cand &cand1);
