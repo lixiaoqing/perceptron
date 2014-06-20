@@ -143,6 +143,11 @@ bool Data::load_test_block(ifstream &fin)
 	token_matrix.push_back(default_token_vec);
 	while(getline(fin,line))
 	{
+		//for the case that the first token in the line is blank
+		if (line[0]==' ')
+		{
+			line[0] = '#';
+		}
 		TrimLine(line);
 		if (line.size() == 0)
 		{
