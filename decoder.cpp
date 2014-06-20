@@ -39,6 +39,7 @@ bool Decoder::decode_for_train(vector<int> &taglist_output, vector<int> &taglist
 		}
 		candlist_new.resize(0);
 
+		/*
 		bool lose_track = true;
 		for (const auto &e_cand : candlist_old)
 		{
@@ -54,6 +55,7 @@ bool Decoder::decode_for_train(vector<int> &taglist_output, vector<int> &taglist
 			taglist_gold = m_gold_taglist;
 			return false;
 		}
+		*/
 		//cout<<"decoding at pos "<<cur_pos-2<<endl;
 	}
 	if (candlist_old.at(0).taglist == m_gold_taglist)
