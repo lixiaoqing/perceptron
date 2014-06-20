@@ -124,6 +124,7 @@ void Model::save_bin_model(size_t round,size_t total_line)
 		cerr<<"fail to open binary model file to write!\n";
 		return;
 	}
+	/*
 	size_t feature_num = 0;
 	for (const auto &fwp : train_para_dict)
 	{
@@ -131,11 +132,15 @@ void Model::save_bin_model(size_t round,size_t total_line)
 			continue;
 		feature_num++;
 	}
+	*/
+	size_t feature_num = train_para_dict.size();
 	fout.write((char*)&feature_num,sizeof(size_t));
 	for (const auto &fwp : train_para_dict)
 	{
+		/*
 		if (fwp.second.acc_weight > -1e-10 && fwp.second.acc_weight < 1e-10)
 			continue;
+		*/
 		size_t len = fwp.first.size();
 		fout.write((char*)&len,sizeof(size_t));
 		fout.write((char*)&(fwp.first.at(0)),sizeof(int)*fwp.first.size());
