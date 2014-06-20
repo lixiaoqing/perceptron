@@ -144,7 +144,8 @@ void Model::save_bin_model(size_t round,size_t total_line)
 		size_t len = fwp.first.size();
 		fout.write((char*)&len,sizeof(size_t));
 		fout.write((char*)&(fwp.first.at(0)),sizeof(int)*fwp.first.size());
-		double weight = fwp.second.acc_weight/total_line;
+		//double weight = fwp.second.acc_weight/total_line;
+		double weight = fwp.second.weight;
 		fout.write((char*)&(weight),sizeof(double));
 	}
 	//cout<<"save binary model over\n";
@@ -236,10 +237,10 @@ void Model::update_paras_for_local_features(const vector<vector<int> > &local_fe
 		}
 		else
 		{
-			it->second.acc_weight += it->second.weight*((round - it->second.lastround)*LINE + line - it->second.lastline) - 1;
+			//it->second.acc_weight += it->second.weight*((round - it->second.lastround)*LINE + line - it->second.lastline) - 1;
 			it->second.weight += -1;
-			it->second.lastline = line;
-			it->second.lastround = round;
+			//it->second.lastline = line;
+			//it->second.lastround = round;
 		}
 	}
 
@@ -253,22 +254,24 @@ void Model::update_paras_for_local_features(const vector<vector<int> > &local_fe
 		}
 		else
 		{
-			it->second.acc_weight += it->second.weight*((round-it->second.lastround)*LINE+line-it->second.lastline)+1;
+			//it->second.acc_weight += it->second.weight*((round-it->second.lastround)*LINE+line-it->second.lastline)+1;
 			it->second.weight += 1;
-			it->second.lastline = line;
-			it->second.lastround = round;
+			//it->second.lastline = line;
+			//it->second.lastround = round;
 		}
 	}
 }
 
 void Model::update_paras_for_lastline(const size_t round, const size_t line)
 {
+	/*
 	for (auto &fwp : train_para_dict)
 	{
 		fwp.second.acc_weight += fwp.second.weight*((round - fwp.second.lastround)*LINE + line - fwp.second.lastline);
 		fwp.second.lastline = line;
 		fwp.second.lastround = round;
 	}
+	*/
 }
 
 vector<int> Model::get_validtagset(int cur_tok_id, int last_tag)
