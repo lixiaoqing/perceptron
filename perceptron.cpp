@@ -1,9 +1,9 @@
 #include "perceptron.h"
 
-Perceptron::Perceptron(Data *data,Model *model)
+Perceptron::Perceptron(Data *data,Model *model,size_t line,size_t round)
 {
-	ROUND = 20;
-	LINE = 1;
+	ROUND = round;
+	LINE = line;
 	m_line = 0;
 	m_round = 0;
 	m_data = data;
@@ -14,7 +14,6 @@ void Perceptron::train(string &train_file)
 {
 	LINE = m_data->get_size();
 	size_t sect_size = LINE/20;
-	m_model->set_line(LINE);
 	for (m_round=0;m_round<ROUND;m_round++)
 	{
 		m_data->shuffle();
@@ -39,8 +38,9 @@ void Perceptron::train(string &train_file)
 			}
 		}
 		cout<<"\t iter"<<m_round<<endl;
-		m_model->save_bin_model(m_round,m_round*LINE);
+		//m_model->save_bin_model(m_round);
 	}
+	m_model->save_bin_model(m_round);
 	//save_model(ROUND*LINE);
 }
 
@@ -106,24 +106,24 @@ int main(int argc, char *argv[])
 	if (argv[1][1] == 't')
 	{
 		string train_file(argv[2]);
-		Data my_data;
-		my_data.set_mode("train");
-		my_data.load_data(train_file);
-		Model my_model;
-		my_model.set_mode("train");
-		Perceptron my_pcpt(&my_data,&my_model);
+		string model_file(argv[4]);
+		size_t round(stoi(argv[6]));
+		string mode("train");
+		Data my_data(mode,train_file);
+		size_t line = my_data.get_size();
+		Model my_model(mode,model_file,line,round);
+		Perceptron my_pcpt(&my_data,&my_model,line,round);
 		my_pcpt.train(train_file);
 	}
 	else if (argv[1][1] == 'd')
 	{
-		Data my_data;
 		string test_file(argv[2]);
-		my_data.set_mode("test");
-		my_data.load_data(test_file);
-		Model my_model;
-		my_model.load_bin_model();
-		my_model.set_mode("test");
-		Perceptron my_pcpt(&my_data,&my_model);
+		string model_file(argv[4]);
+		string mode("test");
+		Data my_data(mode,test_file);
+		size_t line = my_data.get_size();
+		Model my_model(mode,model_file,line,0);
+		Perceptron my_pcpt(&my_data,&my_model,line,0);
 		my_pcpt.test(test_file);
 	}
 

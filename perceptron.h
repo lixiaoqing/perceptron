@@ -5,7 +5,7 @@
 class Perceptron
 {
 	public:
-		Perceptron(Data *data,Model *model);
+		Perceptron(Data *data,Model *model,size_t line,size_t round);
 		void train(string &train_file);
 		void test(string &test_file);
 

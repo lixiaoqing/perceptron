@@ -1,5 +1,11 @@
 #include "data.h"
 
+Data::Data(const string &mode, const string &data_file)
+{
+	MODE = mode;
+	load_data(data_file);
+}
+
 void Data::save_dict()
 {
 	ofstream fout;
@@ -34,6 +40,10 @@ void Data::save_dict()
 	fout<<endl;
 	for (const auto &kvp : token2tagset)
 	{
+		if (token2freq[kvp.first] < 10)
+		{
+			continue;
+		}
 		fout<<kvp.first;
 		for (const auto &e : kvp.second)
 		{
@@ -55,6 +65,8 @@ void Data::save_dict()
 	{
 		fout<<' '<<e;
 	}
+	/*
+	*/
 	fout<<endl;
 	for (const auto &kvp : lasttag2tagset)
 	{
@@ -102,7 +114,7 @@ void Data::load_dict()
 	}
 }
 
-void Data::load_data(string &data_file)
+void Data::load_data(const string &data_file)
 {
 	ifstream fin;
 	fin.open(data_file.c_str());
@@ -146,7 +158,7 @@ bool Data::load_test_block(ifstream &fin)
 		//for the case that the first token in the line is blank
 		if (line[0]==' ')
 		{
-			line[0] = '#';
+			line[0] = '^';
 		}
 		TrimLine(line);
 		if (line.size() == 0)
@@ -216,6 +228,7 @@ bool Data::load_train_block(ifstream &fin)
 			}
 		}
 		token2tagset[token_vec.at(0)].insert(token_vec.at(m_field_size-1));
+		token2freq[token_vec.at(0)] += 1;
 		lasttag2tagset[lasttag_id].insert(token_vec.at(m_field_size-1));
 		tagset.insert(token_vec.at(m_field_size-1));
 		lasttag_id = token_vec.at(m_field_size-1);

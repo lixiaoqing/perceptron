@@ -1,12 +1,19 @@
 #include "model.h"
 
-Model::Model()
+Model::Model(const string &mode, const string &model_file, size_t line, size_t round)
 {
-	NGRAM = 2;
+	MODE = mode;
+	LINE = line;
+	ROUND = round;
+	m_model_file = model_file;
 	m_token_matrix_ptr = NULL;
 	bigram_feature_flag = false;
 	load_validtagset();
 	parse_template();
+	if (MODE == "test")
+	{
+		load_bin_model(m_model_file);
+	}
 }
 
 void Model::load_validtagset()
@@ -94,7 +101,7 @@ void Model::parse_template()
 	fin.close();
 }
 
-void Model::save_model(size_t total_line)
+void Model::save_model()
 {
 	ofstream fout;
 	fout.open("model");
@@ -111,14 +118,14 @@ void Model::save_model(size_t total_line)
 		{
 			fout<<v<<'\t';
 		}
-		fout<<fwp.second.acc_weight/total_line<<endl;
+		fout<<fwp.second.acc_weight/LINE*ROUND<<endl;
 	}
 	cout<<"save model over\n";
 }
 
-void Model::save_bin_model(size_t round,size_t total_line)
+void Model::save_bin_model(size_t round)
 {
-	ofstream fout("model.bin."+to_string(round),ios::binary);
+	ofstream fout(m_model_file,ios::binary);
 	if (!fout.is_open())
 	{
 		cerr<<"fail to open binary model file to write!\n";
@@ -139,7 +146,7 @@ void Model::save_bin_model(size_t round,size_t total_line)
 		size_t len = fwp.first.size();
 		fout.write((char*)&len,sizeof(size_t));
 		fout.write((char*)&(fwp.first.at(0)),sizeof(int)*fwp.first.size());
-		double weight = fwp.second.acc_weight/total_line;
+		double weight = fwp.second.acc_weight/(LINE*ROUND);
 		fout.write((char*)&(weight),sizeof(double));
 	}
 	//cout<<"save binary model over\n";
@@ -170,10 +177,10 @@ void Model::load_model()
 	cout<<"load model over\n";
 }
 
-void Model::load_bin_model()
+void Model::load_bin_model(const string &model_file)
 {
 	ifstream fin;
-	fin.open("model.bin",ios::binary);
+	fin.open(model_file.c_str(),ios::binary);
 	if (!fin.is_open())
 	{
 		cerr<<"fail to open binary model file\n";
