@@ -102,6 +102,12 @@ int main(int argc, char *argv[])
 	clock_t a,b;
 	a = clock();
 
+	if (argc == 1)
+	{
+		cout<<"usage:\n./pcpt -t training_file -m model_file -i iter_num\n./pcpt -d testing_file -m model_file\n";
+		return 0;
+	}
+
 	if (argv[1][1] == 't')
 	{
 		string train_file(argv[2]);
@@ -127,6 +133,6 @@ int main(int argc, char *argv[])
 	}
 
 	b = clock();
-	cout<<"time cost: "<<double(b-a)/CLOCKS_PER_SEC;
+	cout<<"time cost: "<<double(b-a)/CLOCKS_PER_SEC<<endl;
 	return 0;
 }
