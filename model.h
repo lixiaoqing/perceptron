@@ -26,7 +26,6 @@ class Model
 		size_t LINE;
 		size_t ROUND;
 		string m_model_file;
-		const static size_t NGRAM = 3;
 		vector<vector<int> > *m_token_matrix_ptr;
 		unordered_map<vector<int>, WeightInfo, vechash> train_para_dict;
 		unordered_map<vector<int>, double, vechash> test_para_dict;

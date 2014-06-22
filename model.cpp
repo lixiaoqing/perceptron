@@ -213,19 +213,6 @@ void Model::update_paras(const vector<int> &taglist_output, const vector<int> &t
 	size_t end_pos = taglist_output.size();
 	for (size_t i=2;i<end_pos;i++)
 	{
-		bool is_history_same = true;
-		for (size_t k=0;k<NGRAM;k++)
-		{
-			if (taglist_output.at(i-k) != taglist_gold.at(i-k))
-			{
-				is_history_same = false;
-				break;
-			}
-		}
-		if (is_history_same == true)
-		{
-			continue;
-		}
 		vector<vector<int> > local_features = extract_features(taglist_output,i);
 		vector<vector<int> > local_gold_features = extract_features(taglist_gold,i);
 		update_paras_for_local_features(local_features,local_gold_features,round,line);
