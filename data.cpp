@@ -36,22 +36,23 @@ void Data::save_dict()
 	{
 		fout<<' '<<e;
 	}
-	/*
-	fout<<endl;
-	for (const auto &kvp : token2tagset)
+	if (TAGSET_CONSTRAINT == 0 || TAGSET_CONSTRAINT == 2)
 	{
-		if (token2freq[kvp.first] < 10)
-		{
-			continue;
-		}
-		fout<<kvp.first;
-		for (const auto &e : kvp.second)
-		{
-			fout<<' '<<e;
-		}
 		fout<<endl;
+		for (const auto &kvp : token2tagset)
+		{
+			if (token2freq[kvp.first] < THRESHOLD_FOR_RARE)
+			{
+				continue;
+			}
+			fout<<kvp.first;
+			for (const auto &e : kvp.second)
+			{
+				fout<<' '<<e;
+			}
+			fout<<endl;
+		}
 	}
-	*/
 	fout.close();
 
 	fout.open("tagset_for_last_tag");
@@ -65,17 +66,18 @@ void Data::save_dict()
 	{
 		fout<<' '<<e;
 	}
-	/*
-	*/
-	fout<<endl;
-	for (const auto &kvp : lasttag2tagset)
+	if (TAGSET_CONSTRAINT == 1 || TAGSET_CONSTRAINT == 2)
 	{
-		fout<<kvp.first;
-		for (const auto &e : kvp.second)
-		{
-			fout<<' '<<e;
-		}
 		fout<<endl;
+		for (const auto &kvp : lasttag2tagset)
+		{
+			fout<<kvp.first;
+			for (const auto &e : kvp.second)
+			{
+				fout<<' '<<e;
+			}
+			fout<<endl;
+		}
 	}
 	fout.close();
 }

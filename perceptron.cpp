@@ -38,10 +38,9 @@ void Perceptron::train(string &train_file)
 			}
 		}
 		cout<<"\t iter"<<m_round<<endl;
-		//m_model->save_bin_model(m_round);
+		m_model->save_bin_model(m_round);
 	}
-	m_model->save_bin_model(m_round);
-	//save_model(ROUND*LINE);
+	//m_model->save_bin_model(m_round);
 }
 
 void Perceptron::test(string &test_file)

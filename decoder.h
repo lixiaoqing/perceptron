@@ -16,7 +16,7 @@ class Decoder
 	private:
 		Model *m_model;
 		const static size_t BEAM_SIZE = 16;
-		const static size_t NGRAM = 2;
+		const static size_t NGRAM = 3;
 		vector<vector<int> > *m_token_matrix_ptr;
 		vector<Cand> candlist_old;
 		vector<Cand> candlist_new;

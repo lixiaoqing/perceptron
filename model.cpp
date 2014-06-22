@@ -8,6 +8,7 @@ Model::Model(const string &mode, const string &model_file, size_t line, size_t r
 	m_model_file = model_file;
 	m_token_matrix_ptr = NULL;
 	bigram_feature_flag = false;
+	trigram_feature_flag = false;
 	load_validtagset();
 	parse_template();
 	if (MODE == "test")
@@ -84,6 +85,11 @@ void Model::parse_template()
 			bigram_feature_flag = true;
 			continue;
 		}
+		if (line == "T")
+		{
+			trigram_feature_flag = true;
+			continue;
+		}
 		vector<pair<int,int> > feature_template;
 		vector<string> toks;
 		Split(toks,line,sep);
@@ -125,7 +131,7 @@ void Model::save_model()
 
 void Model::save_bin_model(size_t round)
 {
-	ofstream fout(m_model_file,ios::binary);
+	ofstream fout(m_model_file+"."+to_string(round),ios::binary);
 	if (!fout.is_open())
 	{
 		cerr<<"fail to open binary model file to write!\n";
@@ -345,43 +351,19 @@ vector<vector<int> > Model::extract_features(const vector<int> &taglist, size_t 
 		feature.push_back(taglist.at(feature_extract_pos));
 		features.push_back(feature);
 	}
+
+	if (trigram_feature_flag == true)
+	{
+		feature.clear();
+		feature.push_back(++id);
+		feature.push_back(taglist.at(feature_extract_pos-2));
+		feature.push_back(taglist.at(feature_extract_pos-1));
+		feature.push_back(taglist.at(feature_extract_pos));
+		features.push_back(feature);
+	}
 	return features;
 }
 
-/*
-vector<vector<int> > Model::extract_features(const vector<int> &taglist, size_t feature_extract_pos)
-{
-	vector<vector<int> > features;
-	features.clear();
-	int arr[] = {-2,-1,0,1,2};
-	vector<int> feature;
-	for (size_t i=0;i<5;i++)
-	{
-		feature.clear();
-		feature.push_back(i);
-		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+arr[i]).at(0));
-		feature.push_back(taglist.at(feature_extract_pos));
-		features.push_back(feature);
-	}
-	for (size_t i=0;i<4;i++)
-	{
-		feature.clear();
-		feature.push_back(i+5);
-		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+arr[i]).at(0));
-		feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+arr[i+1]).at(0));
-		feature.push_back(taglist.at(feature_extract_pos));
-		features.push_back(feature);
-	}
-	feature.clear();
-	feature.push_back(9);
-	feature.push_back(m_token_matrix_ptr->at(feature_extract_pos-1).at(0));
-	feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+1).at(0));
-	feature.push_back(taglist.at(feature_extract_pos));
-	features.push_back(feature);
-	
-	return features;
-}
-*/
 
 /*
 vector<vector<int> > Model::extract_features(vector<vector<int> > &features, const vector<int> &taglist, size_t feature_extract_pos)
