@@ -4,22 +4,33 @@ void *decode_thread(void *thread_arg)
 {
 	Thread_data *my_thread_data;
 	my_thread_data = (Thread_data *) thread_arg;
-	Decoder my_decoder(my_thread_data->cur_line_ptr,my_thread_data->model_ptr);
-	vector<int> output_taglist = my_decoder.decode();
+	Decoder my_decoder(my_thread_data->cur_line_ptr,my_thread_data->model_ptr,my_thread_data->mode);
+	vector<int> output;
+	output = my_decoder.decode();
 	my_thread_data->output_ptr->clear();
-	for (size_t i=0;i<output_taglist.size();i++)
+	for (size_t i=0;i<output.size();i++)
 	{
-		my_thread_data->output_ptr->push_back(output_taglist.at(i));
+		my_thread_data->output_ptr->push_back(output.at(i));
+	}
+	if (my_thread_data->mode == true)
+	{
+		vector<int> gold = my_decoder.m_gold_taglist;
+		my_thread_data->gold_ptr->clear();
+		for (size_t i=0;i<output.size();i++)
+		{
+			my_thread_data->gold_ptr->push_back(gold.at(i));
+		}
 	}
 	pthread_exit(NULL);
 }
 
-Perceptron::Perceptron(Data *data,Model *model,size_t line,size_t round)
+Perceptron::Perceptron(Data *data,Model *model,size_t line,size_t round,size_t core)
 {
 	ROUND = round;
 	LINE = line;
 	m_line = 0;
 	m_round = 0;
+	NUM_THREADS = core;
 	m_data = data;
 	m_model = model;
 }
@@ -31,32 +42,85 @@ void Perceptron::train(string &train_file)
 	for (m_round=0;m_round<ROUND;m_round++)
 	{
 		m_data->shuffle();
-		for (m_line=0;m_line<LINE;m_line++)
+
+		size_t para_round = LINE/NUM_THREADS;
+		for (size_t r=0;r<para_round;r++)
 		{
-			vector<vector<int> > *cur_line_ptr = m_data->get_token_matrix_ptr(m_line);
-			Decoder m_decoder(cur_line_ptr,m_model);
-			vector<int> taglist_output;
-			vector<int> taglist_gold;
-			if(m_decoder.decode_for_train(taglist_output,taglist_gold) == false)
+			vector<vector<int> > outputs;
+			outputs.resize(NUM_THREADS);
+			vector<vector<int> > golds;
+			golds.resize(NUM_THREADS);
+			vector<pthread_t> threads;
+			threads.resize(NUM_THREADS);
+			vector<Thread_data> tdata;
+			tdata.resize(NUM_THREADS);
+			for (size_t i=0;i<NUM_THREADS;i++)
 			{
-				size_t end_pos = taglist_output.size();
-				for (size_t i=2;i<end_pos;i++)
+				m_line = r*NUM_THREADS + i;
+				vector<vector<int> > *cur_line_ptr = m_data->get_token_matrix_ptr(m_line);
+				vector<int> *output_ptr = &outputs.at(i);
+				vector<int> *gold_ptr = &golds.at(i);
+				tdata[i] = {cur_line_ptr,m_model,output_ptr,gold_ptr,true};
+			}
+			for (size_t i=0;i<NUM_THREADS;i++)
+			{
+				pthread_create(&threads[i], NULL, decode_thread, (void *)&tdata[i]);
+			}
+			for (size_t i=0;i<NUM_THREADS;i++)
+			{
+				pthread_join(threads[i],NULL);
+			}
+			for (size_t i=0;i<NUM_THREADS;i++)
+			{
+				m_line = r*NUM_THREADS + i;
+				if (m_line%sect_size == 0)
 				{
-					vector<vector<int> > local_features = m_decoder.extract_features(taglist_output,i);
-					vector<vector<int> > local_gold_features = m_decoder.extract_features(taglist_gold,i);
+					cout<<'.';
+					cout.flush();
+				}
+				vector<int> &output = outputs.at(i);
+				vector<int> &gold = golds.at(i);
+				if (output == gold)
+				{
+					continue;
+				}
+				size_t end_pos = output.size();
+				for (size_t j=2;j<end_pos;j++)
+				{
+					vector<vector<int> > *cur_line_ptr = m_data->get_token_matrix_ptr(m_line);
+					Decoder m_decoder(cur_line_ptr,m_model,true);
+					vector<vector<int> > local_features = m_decoder.extract_features(output,j);
+					vector<vector<int> > local_gold_features = m_decoder.extract_features(gold,j);
 					m_model->update_paras(local_features,local_gold_features,m_round,m_line);
 				}
 			}
-			if (m_line == LINE - 1)
+		}
+
+		for(size_t m_line=NUM_THREADS*para_round;m_line<LINE;m_line++)
+		{
+			vector<vector<int> > *cur_line_ptr = m_data->get_token_matrix_ptr(m_line);
+			Decoder m_decoder(cur_line_ptr,m_model,true);
+			vector<int> output = m_decoder.decode();
+			vector<int> gold = m_decoder.m_gold_taglist;
+
+			if (output == gold)
 			{
-				m_model->update_paras_for_lastline(m_round,m_line);
+				continue;
 			}
-			if (m_line%sect_size == 0)
+			size_t end_pos = output.size();
+			for (size_t j=2;j<end_pos;j++)
 			{
-				cout<<'.';
-				cout.flush();
+				vector<vector<int> > local_features = m_decoder.extract_features(output,j);
+				vector<vector<int> > local_gold_features = m_decoder.extract_features(gold,j);
+				m_model->update_paras(local_features,local_gold_features,m_round,m_line);
 			}
 		}
+
+		if (m_line == LINE - 1)
+		{
+			m_model->update_paras_for_lastline(m_round,m_line);
+		}
+
 		cout<<"\t iter"<<m_round<<endl;
 		m_model->save_bin_model(m_round);
 	}
@@ -76,52 +140,39 @@ void Perceptron::test(string &test_file)
 
 	vector<vector<int> > outputs;
 	outputs.resize(LINE);
-	/*
-	*/
-	const size_t num_threads = 4;
-	size_t num_rounds = LINE/num_threads;
+	size_t num_rounds = LINE/NUM_THREADS;
 	for (size_t r=0;r<num_rounds;r++)
 	{
-		pthread_t threads[num_threads];
-		Thread_data tdata[num_threads];
-		for (size_t i=0;i<num_threads;i++)
+		vector<pthread_t> threads;
+		threads.resize(NUM_THREADS);
+		vector<Thread_data> tdata;
+		tdata.resize(NUM_THREADS);
+		for (size_t i=0;i<NUM_THREADS;i++)
 		{
-			size_t line = r*num_threads + i;
+			size_t line = r*NUM_THREADS + i;
 			vector<vector<int> > *cur_line_ptr = m_data->get_token_matrix_ptr(line);
 			vector<int> *output_ptr = &outputs.at(line);
-			tdata[i] = {cur_line_ptr,m_model,output_ptr};
+			tdata[i] = {cur_line_ptr,m_model,output_ptr,NULL,false};
 		}
-		for (size_t i=0;i<num_threads;i++)
+		for (size_t i=0;i<NUM_THREADS;i++)
 		{
 			pthread_create(&threads[i], NULL, decode_thread, (void *)&tdata[i]);
 		}
-		for (size_t i=0;i<num_threads;i++)
+		for (size_t i=0;i<NUM_THREADS;i++)
 		{
 			pthread_join(threads[i],NULL);
 		}
 	}
 
-	for(size_t m_line=num_threads*num_rounds;m_line<LINE;m_line++)
+	for(size_t m_line=NUM_THREADS*num_rounds;m_line<LINE;m_line++)
 	{
 		vector<vector<int> > *cur_line_ptr = m_data->get_token_matrix_ptr(m_line);
-		Decoder m_decoder(cur_line_ptr,m_model);
+		Decoder m_decoder(cur_line_ptr,m_model,false);
 		outputs.at(m_line) = m_decoder.decode();
 	}
 
-/*
-//#pragma omp parallel for
 	for(size_t m_line=0;m_line<LINE;m_line++)
 	{
-		vector<vector<int> > *cur_line_ptr = m_data->get_token_matrix_ptr(m_line);
-		Decoder m_decoder(cur_line_ptr,m_model);
-		outputs.at(m_line) = m_decoder.decode();
-	}
-*/
-
-	for(size_t m_line=0;m_line<LINE;m_line++)
-	{
-		//cout<<"output line "<<m_line<<endl;
-		//cout<<"output size "<<outputs.at(m_line).size()<<endl;
 		for (size_t i=2;i<outputs.at(m_line).size();i++)
 		{
 			fout<<m_data->m_data_matrix.at(m_line).at(i)<<'\t'<<m_data->get_tag(outputs.at(m_line).at(i))<<endl;
@@ -137,7 +188,7 @@ int main(int argc, char *argv[])
 
 	if (argc == 1)
 	{
-		cout<<"usage:\n./pcpt -t training_file -m model_file -i iter_num\n./pcpt -d testing_file -m model_file\n";
+		cout<<"usage:\n./pcpt -t training_file -m model_file -i iter_num -c core\n./pcpt -d testing_file -m model_file -c core\n";
 		return 0;
 	}
 
@@ -146,22 +197,22 @@ int main(int argc, char *argv[])
 		string train_file(argv[2]);
 		string model_file(argv[4]);
 		size_t round(stoi(argv[6]));
-		string mode("train");
-		Data my_data(mode,train_file);
+		size_t core(stoi(argv[8]));
+		Data my_data(true,train_file);
 		size_t line = my_data.get_size();
-		Model my_model(mode,model_file,line,round);
-		Perceptron my_pcpt(&my_data,&my_model,line,round);
+		Model my_model(true,model_file,line,round);
+		Perceptron my_pcpt(&my_data,&my_model,line,round,core);
 		my_pcpt.train(train_file);
 	}
 	else if (argv[1][1] == 'd')
 	{
 		string test_file(argv[2]);
 		string model_file(argv[4]);
-		string mode("test");
-		Data my_data(mode,test_file);
+		size_t core(stoi(argv[6]));
+		Data my_data(false,test_file);
 		size_t line = my_data.get_size();
-		Model my_model(mode,model_file,line,0);
-		Perceptron my_pcpt(&my_data,&my_model,line,0);
+		Model my_model(false,model_file,line,0);
+		Perceptron my_pcpt(&my_data,&my_model,line,0,core);
 		my_pcpt.test(test_file);
 	}
 

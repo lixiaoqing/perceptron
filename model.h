@@ -4,7 +4,7 @@
 class Model
 {
 	public:
-		Model(const string &mode, const string &model_file, size_t line, size_t round);
+		Model(bool mode, const string &model_file, size_t line, size_t round);
 		void load_validtagset();
 		void parse_template();
 		void load_model();
@@ -23,7 +23,7 @@ class Model
 		bool trigram_feature_flag;
 
 	private:
-		string MODE;
+		bool MODE;
 		size_t LINE;
 		size_t ROUND;
 		string m_model_file;

@@ -4,7 +4,7 @@
 class Data
 {
 	public:
-		Data(const string &mode, const string &data_file);
+		Data(bool mode, const string &data_file);
 		void shuffle(){random_shuffle(m_token_matrix_list.begin(),m_token_matrix_list.end());};
 		size_t get_size() {return m_token_matrix_list.size();};
 		vector<vector<int> >* get_token_matrix_ptr(size_t m_line) {return &m_token_matrix_list.at(m_line);};
@@ -19,7 +19,7 @@ class Data
 		void save_dict();
 		void load_dict();
 	private:
-		string MODE;
+		bool MODE;
 		const size_t TAGSET_CONSTRAINT = 1;
 		const size_t THRESHOLD_FOR_RARE = 10;
 		size_t m_field_size;

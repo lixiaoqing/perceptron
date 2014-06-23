@@ -1,6 +1,6 @@
 #include "model.h"
 
-Model::Model(const string &mode, const string &model_file, size_t line, size_t round)
+Model::Model(bool mode, const string &model_file, size_t line, size_t round)
 {
 	MODE = mode;
 	LINE = line;
@@ -10,7 +10,7 @@ Model::Model(const string &mode, const string &model_file, size_t line, size_t r
 	trigram_feature_flag = false;
 	load_validtagset();
 	parse_template();
-	if (MODE == "test")
+	if (MODE == false)
 	{
 		load_bin_model(m_model_file);
 	}
@@ -287,13 +287,21 @@ double Model::cal_local_score(const vector<vector<int> > &features)
 	double local_score = 0;
 	for (const auto &e_feature : features)
 	{
-		if (MODE == "train")
+		if (MODE == true)
 		{
-			local_score += train_para_dict[e_feature].weight;
+			auto it=train_para_dict.find(e_feature);
+			if (it != train_para_dict.end())
+			{
+				local_score += it->second.weight;
+			}
 		}
 		else
 		{
-			local_score += test_para_dict[e_feature];
+			auto it=test_para_dict.find(e_feature);
+			if (it != test_para_dict.end())
+			{
+				local_score += it->second;
+			}
 		}
 	}
 	return local_score;

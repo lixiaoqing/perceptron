@@ -1,9 +1,10 @@
 #include "decoder.h"
 
-Decoder::Decoder(vector<vector<int> > *cur_line_ptr,Model *model)
+Decoder::Decoder(vector<vector<int> > *cur_line_ptr,Model *model,bool mode)
 {
 	m_model = model;
 	m_token_matrix_ptr = cur_line_ptr;
+	MODE = mode;
 	candlist_old.clear();
 	candlist_new.clear();
 	Cand init_cand;
@@ -26,54 +27,8 @@ Decoder::~Decoder()
 	m_gold_taglist.resize(0);
 }
 
-bool Decoder::decode_for_train(vector<int> &taglist_output, vector<int> &taglist_gold)
-{
-	for (cur_pos=2;cur_pos<m_token_matrix_ptr->size()-2;cur_pos++)
-	{
-		size_t len = m_token_matrix_ptr->at(cur_pos).size();
-		m_gold_taglist.push_back(m_token_matrix_ptr->at(cur_pos).at(len-1));
-		for (const auto &e_cand : candlist_old)
-		{
-			vector<Cand> candvec = expand(e_cand);
-			add_to_new(candvec);
-		}
-
-		sort(candlist_new.begin(),candlist_new.end(),greater<Cand>());
-
-		candlist_old.swap(candlist_new);
-		if (candlist_old.size() > BEAM_SIZE)
-		{
-			candlist_old.resize(BEAM_SIZE);
-		}
-		candlist_new.resize(0);
-
-		bool lose_track = true;
-		for (const auto &e_cand : candlist_old)
-		{
-			if (e_cand.taglist == m_gold_taglist)
-			{
-				lose_track = false;
-				break;
-			}
-		}
-		if (lose_track == true)
-		{
-			taglist_output = candlist_old.at(0).taglist;
-			taglist_gold = m_gold_taglist;
-			return false;
-		}
-		//cout<<"decoding at pos "<<cur_pos-2<<endl;
-	}
-	if (candlist_old.at(0).taglist == m_gold_taglist)
-		return true;
-	taglist_output = candlist_old.at(0).taglist;
-	taglist_gold = m_gold_taglist;
-	return false;
-}
-
 vector<int> Decoder::decode()
 {
-	//cout<<"current sentence size: "<<m_token_matrix_ptr->size()-2<<endl;
 	for (cur_pos=2;cur_pos<m_token_matrix_ptr->size()-2;cur_pos++)
 	{
 		for (const auto &e_cand : candlist_old)
@@ -90,7 +45,25 @@ vector<int> Decoder::decode()
 			candlist_old.resize(BEAM_SIZE);
 		}
 		candlist_new.resize(0);
-		//cout<<"decoding at pos "<<cur_pos-2<<endl;
+
+		if (MODE == true)
+		{
+			size_t len = m_token_matrix_ptr->at(cur_pos).size();
+			m_gold_taglist.push_back(m_token_matrix_ptr->at(cur_pos).at(len-1));
+			bool lose_track = true;
+			for (const auto &e_cand : candlist_old)
+			{
+				if (e_cand.taglist == m_gold_taglist)
+				{
+					lose_track = false;
+					break;
+				}
+			}
+			if (lose_track == true)
+			{
+				return candlist_old.at(0).taglist;
+			}
+		}
 	}
 	return candlist_old.at(0).taglist;
 }

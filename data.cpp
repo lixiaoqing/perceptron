@@ -1,6 +1,6 @@
 #include "data.h"
 
-Data::Data(const string &mode, const string &data_file)
+Data::Data(bool mode, const string &data_file)
 {
 	MODE = mode;
 	load_data(data_file);
@@ -132,7 +132,7 @@ void Data::load_data(const string &data_file)
 	m_field_size = fields.size();
 	fin.seekg(0,fin.beg);
 
-	if (MODE == "train")
+	if (MODE == true)
 	{
 		ids.resize(m_field_size,1);
 		dict.resize(m_field_size);
