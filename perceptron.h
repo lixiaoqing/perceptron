@@ -2,14 +2,6 @@
 #include "data.h"
 #include "decoder.h"
 
-struct Thread_data
-{
-
-	vector<vector<int> > *cur_line_ptr;
-	Model *model_ptr;
-	vector<int> *output_ptr;
-};
-
 class Perceptron
 {
 	public:
