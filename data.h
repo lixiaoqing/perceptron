@@ -20,7 +20,7 @@ class Data
 		void load_dict();
 	private:
 		string MODE;
-		const size_t TAGSET_CONSTRAINT = 0;
+		const size_t TAGSET_CONSTRAINT = 1;
 		const size_t THRESHOLD_FOR_RARE = 10;
 		size_t m_field_size;
 		vector<int> ids;

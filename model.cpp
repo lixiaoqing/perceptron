@@ -6,7 +6,6 @@ Model::Model(const string &mode, const string &model_file, size_t line, size_t r
 	LINE = line;
 	ROUND = round;
 	m_model_file = model_file;
-	m_token_matrix_ptr = NULL;
 	bigram_feature_flag = false;
 	trigram_feature_flag = false;
 	load_validtagset();
@@ -208,18 +207,7 @@ void Model::load_bin_model(const string &model_file)
 	cout<<"load binary model over\n";
 }
 
-void Model::update_paras(const vector<int> &taglist_output, const vector<int> &taglist_gold, const size_t round, const size_t line)
-{
-	size_t end_pos = taglist_output.size();
-	for (size_t i=2;i<end_pos;i++)
-	{
-		vector<vector<int> > local_features = extract_features(taglist_output,i);
-		vector<vector<int> > local_gold_features = extract_features(taglist_gold,i);
-		update_paras_for_local_features(local_features,local_gold_features,round,line);
-	}
-}
-
-void Model::update_paras_for_local_features(const vector<vector<int> > &local_features, const vector<vector<int> > &local_gold_features, const size_t round, const size_t line)
+void Model::update_paras(const vector<vector<int> > &local_features, const vector<vector<int> > &local_gold_features, const size_t round, const size_t line)
 {
 	for (const auto &e_feature : local_features)
 	{
@@ -294,11 +282,10 @@ vector<int> Model::get_validtagset(int cur_tok_id, int last_tag)
 	return validtagset;
 }
 
-double Model::cal_local_score(const Cand &cand)
+double Model::cal_local_score(const vector<vector<int> > &features)
 {
-	vector<vector<int> > local_features = extract_features(cand.taglist,cand.taglist.size()-1);
 	double local_score = 0;
-	for (const auto &e_feature : local_features)
+	for (const auto &e_feature : features)
 	{
 		if (MODE == "train")
 		{
@@ -310,45 +297,6 @@ double Model::cal_local_score(const Cand &cand)
 		}
 	}
 	return local_score;
-}
-
-vector<vector<int> > Model::extract_features(const vector<int> &taglist, size_t feature_extract_pos)
-{
-	vector<vector<int> > features;
-	features.clear();
-	vector<int> feature;
-	int id = -1;
-	for (const auto &ft : feature_templates)
-	{
-		id ++;
-		feature.clear();
-		feature.push_back(id);
-		for(const auto &rcp : ft)
-		{
-			feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+rcp.first).at(rcp.second));
-		}
-		feature.push_back(taglist.at(feature_extract_pos));
-		features.push_back(feature);
-	}
-	if (bigram_feature_flag == true)
-	{
-		feature.clear();
-		feature.push_back(++id);
-		feature.push_back(taglist.at(feature_extract_pos-1));
-		feature.push_back(taglist.at(feature_extract_pos));
-		features.push_back(feature);
-	}
-
-	if (trigram_feature_flag == true)
-	{
-		feature.clear();
-		feature.push_back(++id);
-		feature.push_back(taglist.at(feature_extract_pos-2));
-		feature.push_back(taglist.at(feature_extract_pos-1));
-		feature.push_back(taglist.at(feature_extract_pos));
-		features.push_back(feature);
-	}
-	return features;
 }
 
 

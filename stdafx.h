@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <math.h>
 #include <stdlib.h>
+#include <pthread.h>
 //#include <zlib.h>
 using namespace std;
 using namespace boost;

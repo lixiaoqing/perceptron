@@ -4,7 +4,6 @@ Decoder::Decoder(vector<vector<int> > *cur_line_ptr,Model *model)
 {
 	m_model = model;
 	m_token_matrix_ptr = cur_line_ptr;
-	m_model->set_cur_line_ptr(cur_line_ptr);
 	candlist_old.clear();
 	candlist_new.clear();
 	Cand init_cand;
@@ -16,6 +15,15 @@ Decoder::Decoder(vector<vector<int> > *cur_line_ptr,Model *model)
 	m_gold_taglist.clear();
 	m_gold_taglist.push_back(0);
 	m_gold_taglist.push_back(0);
+}
+
+Decoder::~Decoder()
+{
+	m_model = NULL;
+	m_token_matrix_ptr = NULL;
+	candlist_old.resize(0);
+	candlist_new.resize(0);
+	m_gold_taglist.resize(0);
 }
 
 bool Decoder::decode_for_train(vector<int> &taglist_output, vector<int> &taglist_gold)
@@ -99,7 +107,8 @@ vector<Cand> Decoder::expand(const Cand &cand)
 		Cand cand_new;
 		cand_new.taglist = cand.taglist;
 		cand_new.taglist.push_back(e_tag);
-		double local_score = m_model->cal_local_score(cand_new);
+		vector<vector<int> > local_features = extract_features(cand_new.taglist,cand_new.taglist.size()-1);
+		double local_score = m_model->cal_local_score(local_features);
 		cand_new.acc_score = cand.acc_score+local_score;
 		candvec.push_back(cand_new);
 	}
@@ -143,5 +152,44 @@ void Decoder::add_to_new(const vector<Cand> &candvec)
 			candlist_new.push_back(e_cand);
 		}
 	}
+}
+
+vector<vector<int> > Decoder::extract_features(const vector<int> &taglist, size_t feature_extract_pos)
+{
+	vector<vector<int> > features;
+	features.clear();
+	vector<int> feature;
+	int id = -1;
+	for (const auto &ft : m_model->feature_templates)
+	{
+		id ++;
+		feature.clear();
+		feature.push_back(id);
+		for(const auto &rcp : ft)
+		{
+			feature.push_back(m_token_matrix_ptr->at(feature_extract_pos+rcp.first).at(rcp.second));
+		}
+		feature.push_back(taglist.at(feature_extract_pos));
+		features.push_back(feature);
+	}
+	if (m_model->bigram_feature_flag == true)
+	{
+		feature.clear();
+		feature.push_back(++id);
+		feature.push_back(taglist.at(feature_extract_pos-1));
+		feature.push_back(taglist.at(feature_extract_pos));
+		features.push_back(feature);
+	}
+
+	if (m_model->trigram_feature_flag == true)
+	{
+		feature.clear();
+		feature.push_back(++id);
+		feature.push_back(taglist.at(feature_extract_pos-2));
+		feature.push_back(taglist.at(feature_extract_pos-1));
+		feature.push_back(taglist.at(feature_extract_pos));
+		features.push_back(feature);
+	}
+	return features;
 }
 
