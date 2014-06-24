@@ -21,7 +21,7 @@ class Decoder
 		vector<vector<int> > *m_token_matrix_ptr;
 		bool MODE;
 		const static size_t BEAM_SIZE = 16;
-		const static size_t NGRAM = 1;
+		const static size_t NGRAM = 3;
 		vector<Cand> candlist_old;
 		vector<Cand> candlist_new;
 		size_t cur_pos;

@@ -50,6 +50,49 @@ void Perceptron::train(string &train_file)
 			outputs.resize(NUM_THREADS);
 			vector<vector<int> > golds;
 			golds.resize(NUM_THREADS);
+#pragma omp parallel for
+			for (size_t i=0;i<NUM_THREADS;i++)
+			{
+				size_t m_line = r*NUM_THREADS + i;
+				vector<vector<int> > *cur_line_ptr = m_data->get_token_matrix_ptr(m_line);
+				Decoder m_decoder(cur_line_ptr,m_model,true);
+				outputs.at(i) = m_decoder.decode();
+				golds.at(i) = m_decoder.m_gold_taglist;
+			}
+
+			for (size_t i=0;i<NUM_THREADS;i++)
+			{
+				m_line = r*NUM_THREADS + i;
+				if (m_line%sect_size == 0)
+				{
+					cout<<'.';
+					cout.flush();
+				}
+				vector<int> &output = outputs.at(i);
+				vector<int> &gold = golds.at(i);
+				if (output == gold)
+				{
+					continue;
+				}
+				size_t end_pos = output.size();
+				for (size_t j=2;j<end_pos;j++)
+				{
+					vector<vector<int> > *cur_line_ptr = m_data->get_token_matrix_ptr(m_line);
+					Decoder m_decoder(cur_line_ptr,m_model,true);
+					vector<vector<int> > local_features = m_decoder.extract_features(output,j);
+					vector<vector<int> > local_gold_features = m_decoder.extract_features(gold,j);
+					m_model->update_paras(local_features,local_gold_features,m_round,m_line);
+				}
+			}
+		}
+
+		/*
+		for (size_t r=0;r<para_round;r++)
+		{
+			vector<vector<int> > outputs;
+			outputs.resize(NUM_THREADS);
+			vector<vector<int> > golds;
+			golds.resize(NUM_THREADS);
 			vector<pthread_t> threads;
 			threads.resize(NUM_THREADS);
 			vector<Thread_data> tdata;
@@ -95,6 +138,7 @@ void Perceptron::train(string &train_file)
 				}
 			}
 		}
+		*/
 
 		for(size_t m_line=NUM_THREADS*para_round;m_line<LINE;m_line++)
 		{
@@ -141,6 +185,21 @@ void Perceptron::test(string &test_file)
 	vector<vector<int> > outputs;
 	outputs.resize(LINE);
 	size_t num_rounds = LINE/NUM_THREADS;
+	/*
+	*/
+	for (size_t r=0;r<num_rounds;r++)
+	{
+#pragma omp parallel for
+		for (size_t i=0;i<NUM_THREADS;i++)
+		{
+			size_t m_line = r*NUM_THREADS + i;
+			vector<vector<int> > *cur_line_ptr = m_data->get_token_matrix_ptr(m_line);
+			Decoder m_decoder(cur_line_ptr,m_model,false);
+			outputs.at(m_line) = m_decoder.decode();
+		}
+	}
+
+	/*
 	for (size_t r=0;r<num_rounds;r++)
 	{
 		vector<pthread_t> threads;
@@ -163,6 +222,7 @@ void Perceptron::test(string &test_file)
 			pthread_join(threads[i],NULL);
 		}
 	}
+	*/
 
 	for(size_t m_line=NUM_THREADS*num_rounds;m_line<LINE;m_line++)
 	{
